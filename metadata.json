@@ -1,0 +1,6 @@
+{
+  "name": "SIAKAD Madrasah",
+  "description": "Sistem Informasi Akademik, Keuangan & PPDB Madrasah (SIAKAD) terpadu: Data Master, Modul Akademik & Rapor PDF, Modul Keuangan (SPP Bulanan, Tagihan Massal, Kasir Cicilan, Kwitansi Otomatis, Rekap Tunggakan), PPDB Online, Pengumuman & Kalender Akademik.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

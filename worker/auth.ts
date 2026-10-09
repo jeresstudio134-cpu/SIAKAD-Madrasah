@@ -2,6 +2,15 @@ import { Context, MiddlewareHandler } from 'hono';
 import { sign, verify } from 'hono/jwt';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import bcrypt from 'bcryptjs';
+
+// Setup random fallback untuk Cloudflare Workers
+if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+  bcrypt.setRandomFallback((len: number) => {
+    const array = new Uint8Array(len);
+    crypto.getRandomValues(array);
+    return Array.from(array);
+  });
+}
 import { AppContext, Bindings } from './types.ts';
 import { store } from './store.ts';
 

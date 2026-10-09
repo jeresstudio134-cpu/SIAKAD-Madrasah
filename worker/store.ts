@@ -4,6 +4,15 @@ import * as schema from '../db/schema.ts';
 import { eq, desc, ilike, and, sql } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 
+// Setup random fallback untuk Cloudflare Workers isolate
+if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+  bcrypt.setRandomFallback((len: number) => {
+    const array = new Uint8Array(len);
+    crypto.getRandomValues(array);
+    return Array.from(array);
+  });
+}
+
 export interface UserRecord {
   id: number;
   username: string;
@@ -415,10 +424,10 @@ class InMemoryDataStore {
   private seedInitialData() {
     const now = new Date();
 
-    // 1. Password hashes
-    const hashedAdmin = bcrypt.hashSync('admin123', 10);
-    const hashedStaf = bcrypt.hashSync('staf123', 10);
-    const hashedGuru = bcrypt.hashSync('guru123', 10);
+    // 1. Password hashes (Pre-computed bcrypt hashes untuk efisiensi & mencegah error isolate di Workers)
+    const hashedAdmin = '$2b$10$BY.DFk6KBDxAtyyUPA6xd.p5dWCUjhB656fhyyjsIHlAKAa9hDdau'; // admin123
+    const hashedStaf = '$2b$10$Z6tIN5YdIsB.kXlPUnOVm.V0LvTl5UxvthAt4zdc4VhDlp/xKZNIa'; // staf123
+    const hashedGuru = '$2b$10$d9Fo37i4HGNRd54aCtmoN.MArn6lvZ0m2kZdE/45zcM708mCa5ZDu'; // guru123
 
     // 2. Profil Madrasah
     this.madrasahProfile = {

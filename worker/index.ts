@@ -58,23 +58,22 @@ app.all('/api/*', (c) => {
 app.get('*', async (c) => {
   if (c.env?.ASSETS) {
     try {
-      // (a) Coba sajikan asset statis langsung (JS bundle, CSS, favicon, file gambar di /dist)
+      // (a) Coba sajikan asset statis langsung (JS bundle, CSS, favicon, gambar di /dist)
       const res = await c.env.ASSETS.fetch(c.req.raw);
 
-      // Jika file statis ditemukan atau binding ASSETS mengembalikan respons sukses
       if (res.status !== 404) {
-        return res;
+        // Bungkus ulang supaya header bisa dimodifikasi secureHeaders
+        return new Response(res.body, res);
       }
 
-      // (b) SPA Fallback: Jika rute bukan file fisik, ambil dan kembalikan index.html
-      // agar client-side router (React Router) dapat me-render halaman yang diminta
+      // (b) SPA Fallback: rute bukan file fisik -> kirim index.html (lewat '/')
       const url = new URL(c.req.url);
-      url.pathname = '/index.html';
-      const fallbackReq = new Request(url.toString(), {
-        method: 'GET',
-        headers: c.req.raw.headers,
-      });
-      return await c.env.ASSETS.fetch(fallbackReq);
+      url.pathname = '/';
+      url.search = '';
+      const fallbackRes = await c.env.ASSETS.fetch(
+        new Request(url.toString(), { method: 'GET' })
+      );
+      return new Response(fallbackRes.body, fallbackRes);
     } catch (err) {
       console.error('Error fetching static asset or SPA fallback:', err);
     }
@@ -98,8 +97,12 @@ app.notFound(async (c) => {
   if (c.req.method === 'GET' && c.env?.ASSETS) {
     try {
       const url = new URL(c.req.url);
-      url.pathname = '/index.html';
-      return await c.env.ASSETS.fetch(new Request(url.toString(), { method: 'GET' }));
+      url.pathname = '/';
+      url.search = '';
+      const res = await c.env.ASSETS.fetch(
+        new Request(url.toString(), { method: 'GET' })
+      );
+      return new Response(res.body, res);
     } catch (err) {
       console.error('Error in notFound SPA fallback:', err);
     }

@@ -1,4 +1,4 @@
-import { eq, desc, asc, ilike, and, or, inArray, sql, count } from 'drizzle-orm';
+import { eq, desc, asc, ilike, and, or, inArray, notInArray, sql, count } from 'drizzle-orm';
 import * as schema from '../db/schema.ts';
 import { getDb, DbClient } from './db.ts';
 
@@ -1010,7 +1010,7 @@ export class DbStore {
 
     const conditions: any[] = [eq(schema.siswa.status, 'aktif')];
     if (assignedIds.length > 0) {
-      conditions.push(sql`${schema.siswa.id} NOT IN (${sql.join(assignedIds, sql`, `)})`);
+      conditions.push(notInArray(schema.siswa.id, assignedIds));
     }
 
     return await this.db
@@ -1026,36 +1026,39 @@ export class DbStore {
       .orderBy(asc(schema.siswa.nama));
   }
 
-  async batchTempatkanSiswa(siswa_ids: number[], kelas_id: number, tahun_ajaran_id: number) {
-    let countSuccess = 0;
-    for (const sid of siswa_ids) {
-      // Hapus jika sudah ada di TA ini
-      await this.db
-        .delete(schema.penempatanSiswa)
-        .where(
-          and(
-            eq(schema.penempatanSiswa.siswa_id, sid),
-            eq(schema.penempatanSiswa.tahun_ajaran_id, tahun_ajaran_id)
-          )
-        );
+    async batchTempatkanSiswa(siswa_ids: number[], kelas_id: number, tahun_ajaran_id: number) {
+    if (siswa_ids.length === 0) return { count: 0 };
+    const now = new Date();
 
-      await this.db.insert(schema.penempatanSiswa).values({
+    // 1. Hapus penempatan lama di TA ini (sekali jalan)
+    await this.db
+      .delete(schema.penempatanSiswa)
+      .where(
+        and(
+          inArray(schema.penempatanSiswa.siswa_id, siswa_ids),
+          eq(schema.penempatanSiswa.tahun_ajaran_id, tahun_ajaran_id)
+        )
+      );
+
+    // 2. Insert semua penempatan baru (sekali jalan)
+    await this.db.insert(schema.penempatanSiswa).values(
+      siswa_ids.map((sid) => ({
         siswa_id: sid,
         kelas_id,
         tahun_ajaran_id,
         status: 'aktif',
-        created_at: new Date(),
-        updated_at: new Date(),
-      });
+        created_at: now,
+        updated_at: now,
+      }))
+    );
 
-      await this.db
-        .update(schema.siswa)
-        .set({ kelas_id, updated_at: new Date() })
-        .where(eq(schema.siswa.id, sid));
+    // 3. Update kelas semua siswa (sekali jalan)
+    await this.db
+      .update(schema.siswa)
+      .set({ kelas_id, updated_at: now })
+      .where(inArray(schema.siswa.id, siswa_ids));
 
-      countSuccess++;
-    }
-    return { count: countSuccess };
+    return { count: siswa_ids.length };
   }
 
   async batchKenaikanKelas(params: {
@@ -1480,50 +1483,44 @@ export class DbStore {
     });
   }
 
-  async saveBatchAbsensi(
+   async saveBatchAbsensi(
     kelas_id: number,
     tanggal: string,
     tahun_ajaran_id: number,
     items: Array<{ siswa_id: number; status: string; catatan?: string }>,
     created_by_user_id?: number
   ) {
-    for (const item of items) {
-      const [existing] = await this.db
-        .select({ id: schema.absensiSiswa.id })
-        .from(schema.absensiSiswa)
-        .where(
-          and(
-            eq(schema.absensiSiswa.siswa_id, item.siswa_id),
-            eq(schema.absensiSiswa.kelas_id, kelas_id),
-            eq(schema.absensiSiswa.tanggal, tanggal),
-            eq(schema.absensiSiswa.tahun_ajaran_id, tahun_ajaran_id)
-          )
-        )
-        .limit(1);
+    if (items.length === 0) return { success: true, count: 0 };
+    const now = new Date();
+    const ids = items.map((i) => i.siswa_id);
 
-      if (existing) {
-        await this.db
-          .update(schema.absensiSiswa)
-          .set({
-            status: item.status,
-            catatan: item.catatan || null,
-            updated_at: new Date(),
-          })
-          .where(eq(schema.absensiSiswa.id, existing.id));
-      } else {
-        await this.db.insert(schema.absensiSiswa).values({
-          siswa_id: item.siswa_id,
-          kelas_id,
-          tahun_ajaran_id,
-          tanggal,
-          status: item.status,
-          catatan: item.catatan || null,
-          created_by_user_id: created_by_user_id || null,
-          created_at: new Date(),
-          updated_at: new Date(),
-        });
-      }
-    }
+    // 1. Hapus absensi lama untuk kelas + tanggal ini (sekali jalan)
+    await this.db
+      .delete(schema.absensiSiswa)
+      .where(
+        and(
+          eq(schema.absensiSiswa.kelas_id, kelas_id),
+          eq(schema.absensiSiswa.tanggal, tanggal),
+          eq(schema.absensiSiswa.tahun_ajaran_id, tahun_ajaran_id),
+          inArray(schema.absensiSiswa.siswa_id, ids)
+        )
+      );
+
+    // 2. Insert semua absensi baru (sekali jalan)
+    await this.db.insert(schema.absensiSiswa).values(
+      items.map((item) => ({
+        siswa_id: item.siswa_id,
+        kelas_id,
+        tahun_ajaran_id,
+        tanggal,
+        status: item.status,
+        catatan: item.catatan || null,
+        created_by_user_id: created_by_user_id || null,
+        created_at: now,
+        updated_at: now,
+      }))
+    );
+
     return { success: true, count: items.length };
   }
 
@@ -3464,23 +3461,20 @@ export class DbStore {
       .leftJoin(schema.guru, eq(schema.kelas.wali_kelas_id, schema.guru.id))
       .orderBy(asc(schema.kelas.tingkat), asc(schema.kelas.nama));
 
-    const siswaPerKelas = await Promise.all(
-      allKelas.map(async (k) => {
-        const [c] = await this.db
-          .select({ val: count() })
-          .from(schema.siswa)
-          .where(and(eq(schema.siswa.kelas_id, k.id), eq(schema.siswa.status, 'aktif')));
+    const siswaCounts = await this.db
+      .select({ kelas_id: schema.siswa.kelas_id, val: count() })
+      .from(schema.siswa)
+      .where(eq(schema.siswa.status, 'aktif'))
+      .groupBy(schema.siswa.kelas_id);
 
-        return {
-          kelas_id: k.id,
-          nama: k.nama,
-          tingkat: k.tingkat,
-          wali_kelas: k.wali_nama || 'Belum ditentukan',
-          kapasitas: k.kapasitas,
-          jumlahSiswa: Number(c?.val || 0),
-        };
-      })
-    );
+    const siswaPerKelas = allKelas.map((k) => ({
+      kelas_id: k.id,
+      nama: k.nama,
+      tingkat: k.tingkat,
+      wali_kelas: k.wali_nama || 'Belum ditentukan',
+      kapasitas: k.kapasitas,
+      jumlahSiswa: Number(siswaCounts.find((c) => c.kelas_id === k.id)?.val || 0),
+    }));
 
     // 6. Ringkasan PPDB
     const ppdbSummary = await this.getPPDBStats(taAktif?.id);
@@ -3532,61 +3526,35 @@ export class DbStore {
       { key: '12', label: 'Desember' },
     ];
 
-    const kehadiranBulanan = await Promise.all(
-      bulanLabels.map(async (b) => {
-        const [hadirRes] = await this.db
-          .select({ val: count() })
-          .from(schema.absensiSiswa)
-          .where(
-            and(
-              eq(schema.absensiSiswa.status, 'H'),
-              sql`TO_CHAR(${schema.absensiSiswa.tanggal}, 'MM') = ${b.key}`
-            )
-          );
-        const [izinRes] = await this.db
-          .select({ val: count() })
-          .from(schema.absensiSiswa)
-          .where(
-            and(
-              eq(schema.absensiSiswa.status, 'I'),
-              sql`TO_CHAR(${schema.absensiSiswa.tanggal}, 'MM') = ${b.key}`
-            )
-          );
-        const [sakitRes] = await this.db
-          .select({ val: count() })
-          .from(schema.absensiSiswa)
-          .where(
-            and(
-              eq(schema.absensiSiswa.status, 'S'),
-              sql`TO_CHAR(${schema.absensiSiswa.tanggal}, 'MM') = ${b.key}`
-            )
-          );
-        const [alpaRes] = await this.db
-          .select({ val: count() })
-          .from(schema.absensiSiswa)
-          .where(
-            and(
-              eq(schema.absensiSiswa.status, 'A'),
-              sql`TO_CHAR(${schema.absensiSiswa.tanggal}, 'MM') = ${b.key}`
-            )
-          );
-
-        const hadir = Number(hadirRes?.val || 0);
-        const izin = Number(izinRes?.val || 0);
-        const sakit = Number(sakitRes?.val || 0);
-        const alpa = Number(alpaRes?.val || 0);
-        const total = hadir + izin + sakit + alpa;
-
-        return {
-          bulan: b.label,
-          hadir,
-          izin,
-          sakit,
-          alpa,
-          persentaseHadir: total > 0 ? Math.round((hadir / total) * 100) : 100,
-        };
+       const absensiAgg = await this.db
+      .select({
+        bulan: sql<string>`TO_CHAR(${schema.absensiSiswa.tanggal}::date, 'MM')`,
+        status: schema.absensiSiswa.status,
+        jumlah: count(),
       })
-    );
+      .from(schema.absensiSiswa)
+      .groupBy(
+        sql`TO_CHAR(${schema.absensiSiswa.tanggal}::date, 'MM')`,
+        schema.absensiSiswa.status
+      );
+
+    const kehadiranBulanan = bulanLabels.map((b) => {
+      const get = (st: string) =>
+        Number(absensiAgg.find((r) => r.bulan === b.key && r.status === st)?.jumlah || 0);
+      const hadir = get('H');
+      const izin = get('I');
+      const sakit = get('S');
+      const alpa = get('A');
+      const total = hadir + izin + sakit + alpa;
+      return {
+        bulan: b.label,
+        hadir,
+        izin,
+        sakit,
+        alpa,
+        persentaseHadir: total > 0 ? Math.round((hadir / total) * 100) : 100,
+      };
+    });
 
     const totalSiswa = Number(totalSiswaRes?.val || 0);
     const siswaAktif = Number(siswaAktifRes?.val || 0);

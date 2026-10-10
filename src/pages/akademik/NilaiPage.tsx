@@ -18,6 +18,8 @@ import {
   Calculator,
 } from 'lucide-react';
 
+const EMPTY_LIST: any[] = [];
+
 export function NilaiPage() {
   const { hasPermission } = useAuth();
   const { success, error, warning } = useToast();
@@ -89,7 +91,8 @@ export function NilaiPage() {
     queryKey: ['mapel-list'],
     queryFn: async () => {
       const res = await api.get<any>('/api/mapel?limit=100');
-      const items = res.data?.data || res.data || [];
+      const d: any = res.data;
+      const items = Array.isArray(d) ? d : d?.items ?? d?.data ?? [];
       return Array.isArray(items) ? items : [];
     },
   });
@@ -136,7 +139,7 @@ export function NilaiPage() {
   }, [bobotData]);
 
   // Query Nilai Siswa
-  const { data: serverNilaiList = [], isLoading } = useQuery({
+  const { data: serverNilaiList = EMPTY_LIST, isLoading } = useQuery({
     queryKey: ['nilai-siswa', selectedKelasId, selectedMapelId, activeTa?.id],
     queryFn: async () => {
       if (!selectedKelasId || !selectedMapelId || !activeTa) return [];
@@ -172,7 +175,7 @@ export function NilaiPage() {
       });
       setNilaiState(mapped);
     } else {
-      setNilaiState([]);
+      setNilaiState((prev) => (prev.length === 0 ? prev : []));
     }
   }, [serverNilaiList]);
 
@@ -409,6 +412,11 @@ export function NilaiPage() {
           <div className="p-6">
             <TableSkeleton rows={5} cols={9} />
           </div>
+        ) : mapelList.length === 0 ? (
+          <EmptyState
+            title="Belum Ada Mata Pelajaran"
+            description="Tambahkan mata pelajaran terlebih dahulu melalui menu Mapel."
+          />
         ) : nilaiState.length === 0 ? (
           <EmptyState
             title="Belum Ada Siswa di Kelas Ini"

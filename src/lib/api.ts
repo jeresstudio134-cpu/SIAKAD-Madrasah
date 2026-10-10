@@ -28,11 +28,25 @@ async function request<T = any>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(endpoint, {
-    ...options,
-    headers,
-    credentials: 'include', // penting untuk httpOnly cookie
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 25000);
+
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      ...options,
+      headers,
+      credentials: 'include', // penting untuk httpOnly cookie
+      signal: options.signal ?? controller.signal,
+    });
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      throw new ApiError('Server terlalu lama merespons. Coba muat ulang halaman.', 408);
+    }
+    throw new ApiError('Tidak dapat terhubung ke server. Periksa koneksi internet Anda.', 0);
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   const contentType = response.headers.get('content-type');
   let result: any = null;

@@ -372,7 +372,7 @@ export const auditLog = pgTable('audit_log', {
   action: varchar('action', { length: 50 }).notNull(), // 'LOGIN' | 'LOGOUT' | 'PASSWORD_CHANGE' | 'CREATE' | 'UPDATE' | 'DELETE' | 'IMPORT' | 'EXPORT' | 'PAYMENT' | 'VOID_PAYMENT'
   entity: varchar('entity', { length: 50 }).notNull(), // 'auth' | 'siswa' | 'guru' | 'kelas' | 'mapel' | 'tahun_ajaran' | 'pengaturan' | 'staf' | 'akademik' | 'keuangan'
   details: text('details'),
-  ip_address: varchar('50'),
+  ip_address: varchar('ip_address', { length: 50 }),
   created_at: timestamp('created_at').notNull().defaultNow(),
 });
 

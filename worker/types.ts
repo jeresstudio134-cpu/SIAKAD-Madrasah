@@ -6,6 +6,7 @@ export interface Bindings {
   CLOUDINARY_API_SECRET?: string;
   TURNSTILE_SECRET_KEY?: string;
   NODE_ENV?: string;
+  ASSETS?: Fetcher;
 }
 
 export interface Variables {

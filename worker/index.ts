@@ -42,8 +42,9 @@ app.route('/api/upload', uploadRouter);
 app.route('/api', informasiRouter);
 app.route('/api', masterRouter);
 
-// 4. Handle 404 pada rute API yang tidak ditemukan
-app.notFound((c) => {
+// 4. Handle Not Found & SPA Fallback untuk Cloudflare Workers Assets
+app.notFound(async (c) => {
+  // Jika request mengarah ke API tapi tidak ada rute yang cocok, kembalikan JSON 404
   if (c.req.path.startsWith('/api')) {
     return c.json(
       {
@@ -53,6 +54,24 @@ app.notFound((c) => {
       404
     );
   }
+
+  // SPA Fallback untuk Cloudflare Workers:
+  // Bila request bukan API (misal /akademik/penempatan, /keuangan, /siswa),
+  // ambil index.html dari binding ASSETS supaya React Router menangani halaman sisi klien.
+  if (c.env?.ASSETS) {
+    try {
+      const url = new URL(c.req.url);
+      url.pathname = '/index.html';
+      const indexReq = new Request(url.toString(), c.req.raw);
+      const res = await c.env.ASSETS.fetch(indexReq);
+      if (res.status === 200 || res.ok) {
+        return res;
+      }
+    } catch (e) {
+      console.error('Error fetching ASSETS fallback:', e);
+    }
+  }
+
   return c.text('Not Found', 404);
 });
 

@@ -30,7 +30,7 @@ export function LoginPage() {
       setIsLoading(true);
       setRateLimitMessage(null);
       const loggedUser = await login(username.trim(), password);
-      success(`Selamat datang, ${loggedUser.nama_lengkap}!`);
+      //success(`Selamat datang, ${loggedUser.nama_lengkap}!`);
       navigate('/');
     } catch (err: any) {
       if (err.status === 429) {

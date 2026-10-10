@@ -13,7 +13,7 @@ import { uploadRouter } from './routes/upload.ts';
 
 export const app = new Hono<AppContext>();
 
-// 1. Keamanan Header HTTP dengan secureHeaders bawaan Hono (menggantikan helmet)
+// 1. Keamanan Header HTTP dengan secureHeaders bawaan Hono
 app.use(
   '*',
   secureHeaders({
@@ -31,7 +31,7 @@ app.get('/api/health', (c) => {
   });
 });
 
-// 3. Mount API Routers (Semua menggunakan prefix /api yang sama persis seperti sebelumnya)
+// 3. Mount API Routers (Semua endpoint backend berprefix /api)
 app.route('/api/auth', authRouter);
 app.route('/api/staf', stafRouter);
 app.route('/api/dashboard', dashboardRouter);
@@ -42,9 +42,49 @@ app.route('/api/upload', uploadRouter);
 app.route('/api', informasiRouter);
 app.route('/api', masterRouter);
 
-// 4. Handle Not Found & SPA Fallback untuk Cloudflare Workers Assets
+// 4. Tangani semua endpoint /api yang tidak ditemukan dengan JSON 404
+app.all('/api/*', (c) => {
+  return c.json(
+    {
+      success: false,
+      message: 'Endpoint API tidak ditemukan.',
+    },
+    404
+  );
+});
+
+// 5. Cloudflare Workers Static Assets & SPA Fallback untuk rute frontend
+// Menangani F5 / refresh halaman (seperti /akademik/penempatan, /keuangan, /siswa, dll.)
+app.get('*', async (c) => {
+  if (c.env?.ASSETS) {
+    try {
+      // (a) Coba sajikan asset statis langsung (JS bundle, CSS, favicon, file gambar di /dist)
+      const res = await c.env.ASSETS.fetch(c.req.raw);
+
+      // Jika file statis ditemukan atau binding ASSETS mengembalikan respons sukses
+      if (res.status !== 404) {
+        return res;
+      }
+
+      // (b) SPA Fallback: Jika rute bukan file fisik, ambil dan kembalikan index.html
+      // agar client-side router (React Router) dapat me-render halaman yang diminta
+      const url = new URL(c.req.url);
+      url.pathname = '/index.html';
+      const fallbackReq = new Request(url.toString(), {
+        method: 'GET',
+        headers: c.req.raw.headers,
+      });
+      return await c.env.ASSETS.fetch(fallbackReq);
+    } catch (err) {
+      console.error('Error fetching static asset or SPA fallback:', err);
+    }
+  }
+
+  return c.text('Not Found', 404);
+});
+
+// 6. Global 404 Handler untuk method selain GET atau fallback darurat
 app.notFound(async (c) => {
-  // Jika request mengarah ke API tapi tidak ada rute yang cocok, kembalikan JSON 404
   if (c.req.path.startsWith('/api')) {
     return c.json(
       {
@@ -55,27 +95,20 @@ app.notFound(async (c) => {
     );
   }
 
-  // SPA Fallback untuk Cloudflare Workers:
-  // Bila request bukan API (misal /akademik/penempatan, /keuangan, /siswa),
-  // ambil index.html dari binding ASSETS supaya React Router menangani halaman sisi klien.
-  if (c.env?.ASSETS) {
+  if (c.req.method === 'GET' && c.env?.ASSETS) {
     try {
       const url = new URL(c.req.url);
       url.pathname = '/index.html';
-      const indexReq = new Request(url.toString(), c.req.raw);
-      const res = await c.env.ASSETS.fetch(indexReq);
-      if (res.status === 200 || res.ok) {
-        return res;
-      }
-    } catch (e) {
-      console.error('Error fetching ASSETS fallback:', e);
+      return await c.env.ASSETS.fetch(new Request(url.toString(), { method: 'GET' }));
+    } catch (err) {
+      console.error('Error in notFound SPA fallback:', err);
     }
   }
 
   return c.text('Not Found', 404);
 });
 
-// 5. Global Error Handler (menggantikan Express error middleware)
+// 7. Global Error Handler
 app.onError((err, c) => {
   console.error('Unhandled Worker Error:', err);
   return c.json(

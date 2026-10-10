@@ -6,7 +6,9 @@ export interface Bindings {
   CLOUDINARY_API_SECRET?: string;
   TURNSTILE_SECRET_KEY?: string;
   NODE_ENV?: string;
-  ASSETS?: Fetcher;
+  ASSETS?: {
+    fetch: (request: Request | string, init?: RequestInit) => Promise<Response>;
+  };
 }
 
 export interface Variables {

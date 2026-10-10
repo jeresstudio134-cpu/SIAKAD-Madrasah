@@ -6,17 +6,20 @@ import { hashPassword } from './auth.ts';
 type Row = Record<string, any>;
 
 function makeTable(seed: Row[] = []) {
-  const rows: Row[] = seed.map((r) => ({ created_at: new Date(), updated_at: new Date(), ...r }));
-  let seq = rows.reduce((m, r) => Math.max(m, r.id || 0), 0);
+  let seq = seed.reduce((m, r) => Math.max(m, r.id || 0), 0);
+  const rows: any[] = seed.map((r) => {
+    const id = r.id || ++seq;
+    return { created_at: new Date(), updated_at: new Date(), ...r, id };
+  });
   return {
     rows,
-    find: (id: number) => rows.find((r) => r.id === id) || null,
-    insert: (d: Row) => {
-      const r = { created_at: new Date(), updated_at: new Date(), ...d, id: ++seq };
+    find: (id: number): any => rows.find((r) => r.id === id) || null,
+    insert: (d: Row): any => {
+      const r: any = { created_at: new Date(), updated_at: new Date(), ...d, id: ++seq };
       rows.push(r);
       return r;
     },
-    update: (id: number, d: Row) => {
+    update: (id: number, d: Row): any => {
       const r = rows.find((x) => x.id === id);
       if (!r) return null;
       Object.assign(r, d, { updated_at: new Date() });
@@ -28,7 +31,7 @@ function makeTable(seed: Row[] = []) {
       rows.splice(i, 1);
       return true;
     },
-    removeWhere: (fn: (r: Row) => boolean) => {
+    removeWhere: (fn: (r: any) => boolean) => {
       for (let i = rows.length - 1; i >= 0; i--) if (fn(rows[i])) rows.splice(i, 1);
     },
   };
@@ -172,12 +175,12 @@ export function createMemoryStore(): any {
   ]);
 
   const pengumuman = makeTable([
-    { judul: 'Penerimaan Rapor Semester Ganjil', konten: 'Pembagian rapor dilaksanakan 20 Desember 2026.', kategori: 'Akademik', target_audiens: 'Semua', is_pinned: true, is_published: true, created_by_user_id: 1 },
-    { judul: 'Libur Maulid Nabi', konten: 'Kegiatan belajar diliburkan.', kategori: 'Umum', target_audiens: 'Semua', is_pinned: false, is_published: true, created_by_user_id: 1 },
+    { id: 1, judul: 'Penerimaan Rapor Semester Ganjil', konten: 'Pembagian rapor dilaksanakan 20 Desember 2026.', kategori: 'Akademik', target_audiens: 'Semua', is_pinned: true, is_published: true, created_by_user_id: 1 },
+    { id: 2, judul: 'Libur Maulid Nabi', konten: 'Kegiatan belajar diliburkan.', kategori: 'Umum', target_audiens: 'Semua', is_pinned: false, is_published: true, created_by_user_id: 1 },
   ]);
   const kalender = makeTable([
-    { tahun_ajaran_id: 1, judul_kegiatan: 'Ujian Tengah Semester', deskripsi: 'UTS Ganjil', tanggal_mulai: '2026-09-21', tanggal_selesai: '2026-09-25', kategori: 'Ujian' },
-    { tahun_ajaran_id: 1, judul_kegiatan: 'Ujian Akhir Semester', deskripsi: 'UAS Ganjil', tanggal_mulai: '2026-12-07', tanggal_selesai: '2026-12-12', kategori: 'Ujian' },
+    { id: 1, tahun_ajaran_id: 1, judul_kegiatan: 'Ujian Tengah Semester', deskripsi: 'UTS Ganjil', tanggal_mulai: '2026-09-21', tanggal_selesai: '2026-09-25', kategori: 'Ujian' },
+    { id: 2, tahun_ajaran_id: 1, judul_kegiatan: 'Ujian Akhir Semester', deskripsi: 'UAS Ganjil', tanggal_mulai: '2026-12-07', tanggal_selesai: '2026-12-12', kategori: 'Ujian' },
   ]);
   const audit = makeTable([]);
   let profile: Row | null = {
@@ -222,7 +225,7 @@ export function createMemoryStore(): any {
       ...t, nominal: Number(t.nominal), kelas: t.kelas_id ? { id: t.kelas_id, nama: kelas.find(t.kelas_id)?.nama } : null,
     })),
   });
-  const tagihanView = (t: Row) => {
+  const tagihanView = (t: any): any => {
     const s = siswa.find(t.siswa_id); const k = kelas.find(t.kelas_id); const j = jenis.find(t.jenis_pembayaran_id);
     return {
       ...t, nominal: Number(t.nominal), terbayar: Number(t.terbayar), sisa: Number(t.sisa),
@@ -232,7 +235,7 @@ export function createMemoryStore(): any {
       jenisPembayaran: { id: t.jenis_pembayaran_id, nama: j?.nama, tipe: j?.tipe },
     };
   };
-  const txView = (x: Row) => {
+  const txView = (x: any): any => {
     const tg = tagihan.find(x.tagihan_id); const s = siswa.find(x.siswa_id);
     const k = tg ? kelas.find(tg.kelas_id) : null; const j = tg ? jenis.find(tg.jenis_pembayaran_id) : null;
     const u = x.created_by_user_id ? users.find(x.created_by_user_id) : null;

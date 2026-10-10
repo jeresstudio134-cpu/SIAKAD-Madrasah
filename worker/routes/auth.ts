@@ -185,6 +185,16 @@ authRouter.post('/change-password', authMiddleware, async (c) => {
     }
 
     const userState = c.get('user');
+    if (!userState || userState.role !== 'admin') {
+      return c.json(
+        {
+          success: false,
+          message: 'Fitur ganti password hanya dapat diakses oleh Administrator.',
+        },
+        403
+      );
+    }
+
     const { old_password, new_password } = parseResult.data;
     const user = await store.getUserById(userState!.id);
 

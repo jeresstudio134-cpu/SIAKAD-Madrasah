@@ -3601,8 +3601,13 @@ export class DbStore {
  * Factory helper: Buat DbStore per request dari URL database Neon.
  * Mengembalikan null jika DATABASE_URL tidak ditemukan.
  */
+import { getMemoryStore } from './memory-store.ts';
+
 export function getStore(databaseUrl?: string): DbStore | null {
   const db = getDb(databaseUrl);
-  if (!db) return null;
+  if (!db) {
+    console.warn('[SIAKAD] DATABASE_URL kosong, memakai data lokal (in-memory).');
+    return getMemoryStore() as unknown as DbStore;
+  }
   return new DbStore(db);
 }

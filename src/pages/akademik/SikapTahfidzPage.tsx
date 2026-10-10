@@ -50,7 +50,7 @@ export function SikapTahfidzPage() {
   const { data: rawTaList = [], isLoading: isLoadingTa } = useQuery({
     queryKey: ['tahun-ajaran'],
     queryFn: async () => {
-      const res = await api.get<TahunAjaran[]>('/api/tahun-ajaran');
+      const res = await api.get<TahunAjaran[]>('/api/tahun-ajaran/simple');
       return Array.isArray(res.data) ? res.data : [];
     },
   });

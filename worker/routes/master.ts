@@ -62,7 +62,7 @@ masterRouter.get('/tahun-ajaran/simple', async (c) => {
 // ==========================================
 // 1. TAHUN AJARAN & SEMESTER
 // ==========================================
-masterRouter.get('/tahun-ajaran', requirePermission('tahun_ajaran', 'lihat'), async (c) => {
+masterRouter.get('/tahun-ajaran', async (c) => {
   const store = getStore(c.env?.DATABASE_URL);
   if (!store) {
     return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);

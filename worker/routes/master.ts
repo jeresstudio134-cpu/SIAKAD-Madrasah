@@ -38,6 +38,27 @@ function emptyDatesToNull<T extends Record<string, any>>(obj: T): T {
   return out;
 }
 
+// Data referensi: cukup login, semua role boleh baca (tanpa requirePermission)
+masterRouter.get('/tahun-ajaran/aktif', async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
+  const active = await store.getActiveTahunAjaran();
+  return c.json({ success: true, data: active ?? null });
+});
+
+masterRouter.get('/tahun-ajaran/simple', async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
+  const list = await store.getTahunAjaranList();
+  return c.json({ success: true, data: list });
+});
+
 // ==========================================
 // 1. TAHUN AJARAN & SEMESTER
 // ==========================================

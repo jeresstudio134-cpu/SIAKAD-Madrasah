@@ -91,16 +91,27 @@ export function SiswaPage() {
       if (kelasFilter) params.append('kelas_id', kelasFilter);
       if (statusFilter) params.append('status', statusFilter);
 
-      const res = await api.get<PaginatedResult<Siswa>>(`/api/siswa?${params.toString()}`);
-      return res.data;
+      const res = await api.get<any>(`/api/siswa?${params.toString()}`);
+      const d: any = res.data;
+      const rows = Array.isArray(d) ? d : d?.items ?? d?.data ?? [];
+      const pg = d?.pagination ?? d ?? {};
+      return {
+        data: rows as Siswa[],
+        page: Number(pg.page) || page,
+        limit: Number(pg.limit) || limit,
+        total: Number(pg.total) || rows.length,
+        totalPages: Number(pg.totalPages) || 1,
+      } as PaginatedResult<Siswa>;
     },
   });
 
   const { data: kelasList = [] } = useQuery({
     queryKey: ['kelas-simple'],
     queryFn: async () => {
-      const res = await api.get<any[]>('/api/kelas/simple');
-      return res.data || [];
+      const res = await api.get<any>('/api/kelas/simple');
+      const d: any = res.data;
+      const rows = Array.isArray(d) ? d : d?.items ?? [];
+      return rows as any[];
     },
   });
 

@@ -66,6 +66,12 @@ async function request<T = any>(
     throw new ApiError(errorMsg, response.status, result?.data, result?.mustChangePassword);
   }
 
+    // Backend mengirim { items, pagination }; sebagian halaman membaca { data, page, limit, total, totalPages }
+  const d = result?.data;
+  if (d && !Array.isArray(d) && Array.isArray(d.items) && d.pagination) {
+    result.data = { ...d, data: d.items, ...d.pagination };
+  }
+
   return result as ApiResponse<T>;
 }
 

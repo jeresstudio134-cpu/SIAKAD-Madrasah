@@ -29,6 +29,15 @@ function getClientIp(c: any): string {
   );
 }
 
+// Ubah string kosong pada kolom tanggal menjadi null (kolom bertipe date di Postgres)
+function emptyDatesToNull<T extends Record<string, any>>(obj: T): T {
+  const out: any = { ...obj };
+  for (const key of ['tanggal_lahir', 'tanggal_mulai', 'tanggal_selesai']) {
+    if (out[key] === '') out[key] = null;
+  }
+  return out;
+}
+
 // ==========================================
 // 1. TAHUN AJARAN & SEMESTER
 // ==========================================
@@ -956,7 +965,7 @@ masterRouter.post('/siswa', requirePermission('siswa', 'tambah'), async (c) => {
     );
   }
 
-  const created = await store.createSiswa(parsed.data as any);
+  const created = await store.createSiswa(emptyDatesToNull(parsed.data) as any);
   const user = c.get('user')!;
   await store.createAuditLog({
     user_id: user.id,
@@ -996,7 +1005,7 @@ masterRouter.put('/siswa/:id', requirePermission('siswa', 'ubah'), async (c) => 
     );
   }
 
-  const updated = await store.updateSiswa(id, parsed.data as any);
+  const updated = await store.updateSiswa(id, emptyDatesToNull(parsed.data) as any);
   if (!updated) {
     return c.json({ success: false, message: 'Data siswa tidak ditemukan' }, 404);
   }

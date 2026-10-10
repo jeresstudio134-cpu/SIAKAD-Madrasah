@@ -16,9 +16,9 @@ export function RaporPage() {
 
   // Queries
   const { data: rawTaList = [], isLoading: isLoadingTa } = useQuery({
-    queryKey: ['tahun-ajaran'],
+    queryKey: ['tahun-ajaran-simple'],
     queryFn: async () => {
-      const res = await api.get<TahunAjaran[]>('/api/tahun-ajaran');
+      const res = await api.get<TahunAjaran[]>('/api/tahun-ajaran/simple');
       return Array.isArray(res.data) ? res.data : [];
     },
   });
@@ -100,11 +100,21 @@ export function RaporPage() {
     window.print();
   };
 
-  if (isLoadingTa) {
+    if (isLoadingTa) {
     return (
       <div className="bg-white p-8 rounded-2xl border border-slate-200/80 shadow-xs">
         <TableSkeleton rows={6} cols={4} />
       </div>
+    );
+  }
+
+  if (taError) {
+    return (
+      <EmptyState
+        title="Gagal Memuat Tahun Ajaran"
+        description={(taError as Error).message}
+        icon={<AlertCircle className="w-8 h-8 text-red-600" />}
+      />
     );
   }
 

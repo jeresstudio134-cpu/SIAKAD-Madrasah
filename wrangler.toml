@@ -1,0 +1,13 @@
+name = "siakad-madrasah"
+main = "worker/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# Serve Vite build static assets via Cloudflare Workers Assets
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+
+# Environment variables & bindings (dapat dioverride via Cloudflare Dashboard / Secrets)
+[vars]
+NODE_ENV = "production"

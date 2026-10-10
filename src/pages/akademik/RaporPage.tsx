@@ -159,7 +159,7 @@ export function RaporPage() {
           />
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm print:border-none print:shadow-none p-6 sm:p-10 max-w-4xl mx-auto print:p-0 print:m-0 text-slate-900 font-serif leading-relaxed">
+        <div className="print-area print-a4 bg-white rounded-2xl border border-slate-200 shadow-sm print:border-none print:shadow-none p-6 sm:p-10 max-w-4xl mx-auto print:p-0 print:m-0 text-slate-900 font-serif leading-relaxed">
           {/* 1. KOP SURAT MADRASAH */}
           <div className="border-b-4 border-double border-slate-900 pb-4 mb-6">
             <div className="flex items-center justify-between gap-4">

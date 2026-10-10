@@ -63,7 +63,7 @@ export function KwitansiModal({ isOpen, onClose, transaksiId }: KwitansiModalPro
             Data kwitansi tidak ditemukan.
           </div>
         ) : (
-          <div className="bg-white p-6 sm:p-8 rounded-xl border border-slate-200/90 shadow-xs print:border-none print:shadow-none print:p-0 text-slate-900 font-sans">
+          <div className="print-area print-a5 bg-white p-6 sm:p-8 rounded-xl border border-slate-200/90 shadow-xs print:border-none print:shadow-none print:p-0 text-slate-900 font-sans">
             {/* Status Dibatalkan Watermark */}
             {kwitansi.transaksi.status === 'dibatalkan' && (
               <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-lg flex items-center gap-2 text-rose-700 text-xs font-semibold">

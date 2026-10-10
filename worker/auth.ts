@@ -153,7 +153,8 @@ export function requirePermission(
       );
     }
 
-    if (user.must_change_password) {
+    // Admin tidak dikenakan paksaan ganti password saat login (dapat ganti manual di menu profil jika diperlukan)
+    if (user.role !== 'admin' && user.must_change_password) {
       return c.json(
         {
           success: false,

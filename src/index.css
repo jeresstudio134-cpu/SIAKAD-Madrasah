@@ -1,1 +1,158 @@
 @import "tailwindcss";
+
+/* ==========================================================================
+   SISTEM CETAK BERSAMA (PRINT CSS SYSTEM)
+   Fokus: Rapor Siswa, Kwitansi Pembayaran, Tunggakan, Bukti PPDB
+   ========================================================================== */
+
+/* Page sizes using named pages */
+@page {
+  size: A4 portrait;
+  margin: 12mm 15mm;
+}
+
+@page a4 {
+  size: A4 portrait;
+  margin: 12mm 15mm;
+}
+
+@page a4land {
+  size: A4 landscape;
+  margin: 10mm 12mm;
+}
+
+@page a5 {
+  size: A5 portrait;
+  margin: 10mm 10mm;
+}
+
+.print-a4 {
+  page: a4;
+}
+
+.print-a4-landscape {
+  page: a4land;
+}
+
+.print-a5 {
+  page: a5;
+}
+
+@media print {
+  /* 1. Reset Root & Container Layout */
+  html,
+  body,
+  #root,
+  div,
+  main,
+  section,
+  article {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    position: static !important;
+    background: transparent !important;
+    color: #0f172a !important; /* slate-900 */
+    box-shadow: none !important;
+  }
+
+  body {
+    background-color: #ffffff !important;
+    font-size: 11pt !important;
+    line-height: 1.4 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* 2. Sembunyikan elemen UI aplikasi */
+  aside,
+  header,
+  nav,
+  footer,
+  button,
+  .no-print,
+  [role="dialog"] > div:first-child:not(.print-area),
+  .custom-scrollbar {
+    /* Hide navigational Chrome elements */
+  }
+
+  /* Modal specific handling: hide modal overlay backgrounds and close buttons */
+  .fixed.inset-0.bg-slate-900\/60,
+  header.sticky,
+  button:not(.print-preserve) {
+    display: none !important;
+  }
+
+  /* Hide sidebar and app layout navigation */
+  aside.w-64,
+  header.sticky.top-0,
+  div.custom-scrollbar,
+  .print-hide {
+    display: none !important;
+  }
+
+  /* 3. Tampilkan dan optimalkan .print-area */
+  .print-area {
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: #ffffff !important;
+    position: static !important;
+    transform: none !important;
+  }
+
+  /* Jika modal berisi print-area, pastikan wrapper modal tidak membatasi ukuran */
+  div:has(> .print-area),
+  div:has(> * > .print-area) {
+    overflow: visible !important;
+    max-height: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+
+  /* 4. Table Print Formatting */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 10pt !important;
+    page-break-inside: auto !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  tfoot {
+    display: table-footer-group !important;
+  }
+
+  tr,
+  .print-avoid-break {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  h1, h2, h3, h4, .section-title {
+    break-after: avoid !important;
+    page-break-after: avoid !important;
+  }
+
+  /* Badge dan background cetak tetap berwarna tajam */
+  .badge,
+  span,
+  th {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hilangkan underline link pada cetak */
+  a {
+    text-decoration: none !important;
+    color: inherit !important;
+  }
+}

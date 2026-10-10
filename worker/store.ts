@@ -584,7 +584,7 @@ class InMemoryDataStore {
         staf_role: null,
         guru_id: null,
         is_active: true,
-        must_change_password: true,
+        must_change_password: false,
         permissions: null,
         created_at: now,
         updated_at: now,

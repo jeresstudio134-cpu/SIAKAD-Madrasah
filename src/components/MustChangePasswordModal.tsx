@@ -12,7 +12,7 @@ export function MustChangePasswordModal() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  if (!user || !user.must_change_password) {
+  if (!user || user.role === 'admin' || !user.must_change_password) {
     return null;
   }
 

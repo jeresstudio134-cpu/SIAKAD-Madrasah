@@ -267,7 +267,7 @@ export function PPDBPublicPage() {
           <div>
             {registeredResult ? (
               /* Kartu Bukti Pendaftaran Setelah Berhasil */
-              <div className="bg-white rounded-3xl p-6 sm:p-8 border border-emerald-200 shadow-xl space-y-6">
+              <div className="print-area print-a4 bg-white rounded-3xl p-6 sm:p-8 border border-emerald-200 shadow-xl space-y-6">
                 <div className="flex flex-col items-center text-center space-y-2 border-b border-slate-100 pb-6">
                   <div className="w-16 h-16 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
                     <CheckCircle2 className="w-10 h-10" />
@@ -717,7 +717,7 @@ export function PPDBPublicPage() {
 
             {/* Hasil Pencarian */}
             {searchedData && (
-              <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-lg space-y-6 animate-in fade-in duration-200">
+              <div className="print-area print-a4 bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-lg space-y-6 animate-in fade-in duration-200">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
                   <div>
                     <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg">

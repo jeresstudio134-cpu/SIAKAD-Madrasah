@@ -204,7 +204,7 @@ export function TunggakanPage() {
       </div>
 
       {/* Printable Sheet View for Printing */}
-      <div className="print:block hidden mb-6 text-center border-b pb-4">
+      <div className="print-area print-a4-landscape print:block hidden mb-6 text-center border-b pb-4">
         <h1 className="text-lg font-bold uppercase tracking-wider">
           DAFTAR TUNGGAKAN PEMBAYARAN SISWA
         </h1>

@@ -15,13 +15,13 @@ export function RaporPage() {
   const { user } = useAuth();
 
   // Queries
-  const { data: rawTaList = [], isLoading: isLoadingTa } = useQuery({
-    queryKey: ['tahun-ajaran-simple'],
-    queryFn: async () => {
-      const res = await api.get<TahunAjaran[]>('/api/tahun-ajaran/simple');
-      return Array.isArray(res.data) ? res.data : [];
-    },
-  });
+ const { data: rawTaList = [], isLoading: isLoadingTa, error: taError } = useQuery({
+  queryKey: ['tahun-ajaran-simple'],
+  queryFn: async () => {
+    const res = await api.get<TahunAjaran[]>('/api/tahun-ajaran/simple');
+    return Array.isArray(res.data) ? res.data : [];
+  },
+});
 
   const taList = Array.isArray(rawTaList) ? rawTaList : [];
   const activeTa = taList.find((t) => t?.is_active) || taList[0];

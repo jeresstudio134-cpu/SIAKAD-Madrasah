@@ -8,7 +8,7 @@ import {
   setAuthCookie,
   clearAuthCookie,
 } from '../auth.ts';
-import { store } from '../store.ts';
+import { getStore } from '../store.ts';
 import { LoginSchema, ChangePasswordSchema } from '../zod-schemas.ts';
 
 export const authRouter = new Hono<AppContext>();
@@ -24,6 +24,17 @@ function getClientIp(c: any): string {
 // 1. LOGIN
 authRouter.post('/login', async (c) => {
   try {
+    const store = getStore(c.env?.DATABASE_URL);
+    if (!store) {
+      return c.json(
+        {
+          success: false,
+          message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).',
+        },
+        500
+      );
+    }
+
     const body = await c.req.json().catch(() => ({}));
     const parseResult = LoginSchema.safeParse(body);
     if (!parseResult.success) {
@@ -37,7 +48,7 @@ authRouter.post('/login', async (c) => {
     }
 
     const { username, password } = parseResult.data;
-    const user = store.getUserByUsername(username);
+    const user = await store.getUserByUsername(username);
 
     if (!user) {
       return c.json(
@@ -74,7 +85,7 @@ authRouter.post('/login', async (c) => {
       {
         userId: user.id,
         username: user.username,
-        role: user.role,
+        role: user.role as 'admin' | 'staf' | 'guru',
         stafRole: user.staf_role,
         guruId: user.guru_id,
         mustChangePassword: user.must_change_password,
@@ -84,7 +95,7 @@ authRouter.post('/login', async (c) => {
 
     setAuthCookie(c, token);
 
-    store.createAuditLog({
+    await store.createAuditLog({
       user_id: user.id,
       username: user.username,
       action: 'LOGIN',
@@ -118,8 +129,9 @@ authRouter.post('/login', async (c) => {
 // 2. LOGOUT
 authRouter.post('/logout', authMiddleware, async (c) => {
   const user = c.get('user');
-  if (user) {
-    store.createAuditLog({
+  const store = getStore(c.env?.DATABASE_URL);
+  if (user && store) {
+    await store.createAuditLog({
       user_id: user.id,
       username: user.username,
       action: 'LOGOUT',
@@ -149,6 +161,17 @@ authRouter.get('/me', authMiddleware, async (c) => {
 // 4. GANTI PASSWORD
 authRouter.post('/change-password', authMiddleware, async (c) => {
   try {
+    const store = getStore(c.env?.DATABASE_URL);
+    if (!store) {
+      return c.json(
+        {
+          success: false,
+          message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).',
+        },
+        500
+      );
+    }
+
     const body = await c.req.json().catch(() => ({}));
     const parseResult = ChangePasswordSchema.safeParse(body);
     if (!parseResult.success) {
@@ -163,7 +186,7 @@ authRouter.post('/change-password', authMiddleware, async (c) => {
 
     const userState = c.get('user');
     const { old_password, new_password } = parseResult.data;
-    const user = store.getUserById(userState!.id);
+    const user = await store.getUserById(userState!.id);
 
     if (!user) {
       return c.json(
@@ -187,11 +210,12 @@ authRouter.post('/change-password', authMiddleware, async (c) => {
     }
 
     const newHash = await hashPassword(new_password);
-    user.password_hash = newHash;
-    user.must_change_password = false;
-    user.updated_at = new Date();
+    await store.updateUser(user.id, {
+      password_hash: newHash,
+      must_change_password: false,
+    });
 
-    store.createAuditLog({
+    await store.createAuditLog({
       user_id: user.id,
       username: user.username,
       action: 'UPDATE',
@@ -204,7 +228,7 @@ authRouter.post('/change-password', authMiddleware, async (c) => {
       {
         userId: user.id,
         username: user.username,
-        role: user.role,
+        role: user.role as 'admin' | 'staf' | 'guru',
         stafRole: user.staf_role,
         guruId: user.guru_id,
         mustChangePassword: false,

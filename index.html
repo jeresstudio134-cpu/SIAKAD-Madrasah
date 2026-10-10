@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="id">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -9,10 +9,86 @@
     <meta property="og:description" content="Sistem Informasi Akademik, Keuangan & PPDB Madrasah (SIAKAD) terpadu: Data Master, Modul Akademik & Rapor PDF, Modul Keuangan (SPP Bulanan, Tagihan Massal, Kasir Cicilan, Kwitansi Otomatis, Rekap Tunggakan), PPDB Online, Pengumuman & Kalender Akademik." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+    <style>
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 0.4; transform: scaleX(0.7); }
+        50% { opacity: 1; transform: scaleX(1); }
+      }
+      .siakad-preloader {
+        position: fixed;
+        inset: 0;
+        background: #022c22;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+      }
+      .siakad-preloader-box {
+        position: relative;
+        width: 56px;
+        height: 56px;
+        margin-bottom: 20px;
+      }
+      .siakad-preloader-icon {
+        width: 100%;
+        height: 100%;
+        border-radius: 16px;
+        background: linear-gradient(135deg, #059669, #10b981);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 10px 25px -5px rgba(6, 95, 70, 0.6);
+        border: 1px solid rgba(52, 211, 153, 0.3);
+      }
+      .siakad-preloader-ring {
+        position: absolute;
+        inset: -6px;
+        border: 2px solid rgba(16, 185, 129, 0.2);
+        border-top-color: #34d399;
+        border-radius: 20px;
+        animation: spin 1s linear infinite;
+      }
+      .siakad-preloader-bar {
+        width: 120px;
+        height: 4px;
+        background: rgba(6, 78, 59, 0.8);
+        border-radius: 9999px;
+        overflow: hidden;
+      }
+      .siakad-preloader-progress {
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, #10b981, #34d399);
+        border-radius: 9999px;
+        animation: pulse 1.5s ease-in-out infinite;
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="siakad-preloader">
+        <div class="siakad-preloader-box">
+          <div class="siakad-preloader-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 22v-4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v4"/>
+              <path d="m18 10 4 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8l4-2"/>
+              <path d="M18 5v17"/>
+              <path d="m4 6 8-4 8 4"/>
+              <path d="M6 5v17"/>
+              <circle cx="12" cy="9" r="2"/>
+            </svg>
+          </div>
+          <div class="siakad-preloader-ring"></div>
+        </div>
+        <div class="siakad-preloader-bar">
+          <div class="siakad-preloader-progress"></div>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

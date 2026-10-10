@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User, ModulePermission } from '../types';
-import { api, ApiError } from '../lib/api';
+import { api } from '../lib/api';
 
 interface AuthContextType {
   user: User | null;
@@ -17,21 +17,48 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Helper membaca data user tersimpan di localStorage secara sinkron
+const getStoredUser = (): User | null => {
+  try {
+    const raw = localStorage.getItem('siakad_user');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && parsed.id && parsed.username) {
+        return parsed as User;
+      }
+    }
+  } catch (e) {
+    console.warn('Gagal membaca data user dari localStorage:', e);
+  }
+  return null;
+};
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  // Inisialisasi state user dari localStorage secara sinkron
+  const [user, setUser] = useState<User | null>(getStoredUser);
+  // Kalau data user tersimpan, set loading = false dari awal
+  const [isLoading, setIsLoading] = useState<boolean>(() => !getStoredUser());
 
   const checkAuth = useCallback(async () => {
     try {
-      setIsLoading(true);
+      // Verifikasi sesi di latar belakang tanpa memblokir tampilan jika user sudah ada
       const res = await api.get<{ user: User }>('/api/auth/me');
       if (res.success && res.data?.user) {
         setUser(res.data.user);
+        // Simpan profil & permission untuk tampilan (bukan token sensitif)
+        localStorage.setItem('siakad_user', JSON.stringify(res.data.user));
       } else {
         setUser(null);
+        localStorage.removeItem('siakad_user');
+        localStorage.removeItem('siakad_token');
       }
-    } catch {
-      setUser(null);
+    } catch (err: any) {
+      // Jika 401 Unauthorized / 403 Forbidden, bersihkan cache dan arahkan login
+      if (err?.status === 401 || err?.status === 403) {
+        setUser(null);
+        localStorage.removeItem('siakad_user');
+        localStorage.removeItem('siakad_token');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -53,6 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (res.data?.user) {
       setUser(res.data.user);
+      localStorage.setItem('siakad_user', JSON.stringify(res.data.user));
       return res.data.user;
     }
 
@@ -66,6 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.warn('Logout error:', e);
     } finally {
       localStorage.removeItem('siakad_token');
+      localStorage.removeItem('siakad_user');
       setUser(null);
     }
   };
@@ -77,7 +106,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     if (res.success) {
-      setUser((prev) => (prev ? { ...prev, must_change_password: false } : null));
+      setUser((prev) => {
+        if (!prev) return null;
+        const updated = { ...prev, must_change_password: false };
+        localStorage.setItem('siakad_user', JSON.stringify(updated));
+        return updated;
+      });
     }
   };
 

@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import * as XLSX from 'xlsx';
 import { AppContext } from '../types.ts';
 import { authMiddleware, requirePermission } from '../auth.ts';
-import { store } from '../store.ts';
+import { getStore } from '../store.ts';
 
 import {
   MadrasahProfileSchema,
@@ -33,7 +33,12 @@ function getClientIp(c: any): string {
 // 1. TAHUN AJARAN & SEMESTER
 // ==========================================
 masterRouter.get('/tahun-ajaran', requirePermission('tahun_ajaran', 'lihat'), async (c) => {
-  const list = store.getTahunAjaranList();
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
+  const list = await store.getTahunAjaranList();
   return c.json({
     success: true,
     data: list,
@@ -42,6 +47,11 @@ masterRouter.get('/tahun-ajaran', requirePermission('tahun_ajaran', 'lihat'), as
 });
 
 masterRouter.post('/tahun-ajaran', requirePermission('tahun_ajaran', 'tambah'), async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
   const body = await c.req.json().catch(() => ({}));
   const parsed = TahunAjaranSchema.safeParse(body);
   if (!parsed.success) {
@@ -54,9 +64,9 @@ masterRouter.post('/tahun-ajaran', requirePermission('tahun_ajaran', 'tambah'), 
     );
   }
 
-  const created = store.createTahunAjaran(parsed.data as any);
+  const created = await store.createTahunAjaran(parsed.data as any);
   const user = c.get('user')!;
-  store.createAuditLog({
+  await store.createAuditLog({
     user_id: user.id,
     username: user.username,
     action: 'CREATE',
@@ -76,6 +86,11 @@ masterRouter.post('/tahun-ajaran', requirePermission('tahun_ajaran', 'tambah'), 
 });
 
 masterRouter.put('/tahun-ajaran/:id', requirePermission('tahun_ajaran', 'ubah'), async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
   const id = Number(c.req.param('id'));
   const body = await c.req.json().catch(() => ({}));
   const parsed = TahunAjaranSchema.safeParse(body);
@@ -89,13 +104,13 @@ masterRouter.put('/tahun-ajaran/:id', requirePermission('tahun_ajaran', 'ubah'),
     );
   }
 
-  const updated = store.updateTahunAjaran(id, parsed.data as any);
+  const updated = await store.updateTahunAjaran(id, parsed.data as any);
   if (!updated) {
     return c.json({ success: false, message: 'Tahun ajaran tidak ditemukan' }, 404);
   }
 
   const user = c.get('user')!;
-  store.createAuditLog({
+  await store.createAuditLog({
     user_id: user.id,
     username: user.username,
     action: 'UPDATE',
@@ -112,14 +127,19 @@ masterRouter.put('/tahun-ajaran/:id', requirePermission('tahun_ajaran', 'ubah'),
 });
 
 masterRouter.put('/tahun-ajaran/:id/aktifkan', requirePermission('tahun_ajaran', 'ubah'), async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
   const id = Number(c.req.param('id'));
-  const updated = store.updateTahunAjaran(id, { is_active: true });
+  const updated = await store.updateTahunAjaran(id, { is_active: true });
   if (!updated) {
     return c.json({ success: false, message: 'Tahun ajaran tidak ditemukan' }, 404);
   }
 
   const user = c.get('user')!;
-  store.createAuditLog({
+  await store.createAuditLog({
     user_id: user.id,
     username: user.username,
     action: 'UPDATE',
@@ -136,14 +156,19 @@ masterRouter.put('/tahun-ajaran/:id/aktifkan', requirePermission('tahun_ajaran',
 });
 
 masterRouter.patch('/tahun-ajaran/:id/activate', requirePermission('tahun_ajaran', 'ubah'), async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
   const id = Number(c.req.param('id'));
-  const updated = store.updateTahunAjaran(id, { is_active: true });
+  const updated = await store.updateTahunAjaran(id, { is_active: true });
   if (!updated) {
     return c.json({ success: false, message: 'Tahun ajaran tidak ditemukan' }, 404);
   }
 
   const user = c.get('user')!;
-  store.createAuditLog({
+  await store.createAuditLog({
     user_id: user.id,
     username: user.username,
     action: 'UPDATE',
@@ -160,8 +185,13 @@ masterRouter.patch('/tahun-ajaran/:id/activate', requirePermission('tahun_ajaran
 });
 
 masterRouter.delete('/tahun-ajaran/:id', requirePermission('tahun_ajaran', 'hapus'), async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
   const id = Number(c.req.param('id'));
-  const item = store.getTahunAjaranList().find((t) => t.id === id);
+  const item = await store.getTahunAjaranById(id);
   if (!item) {
     return c.json({ success: false, message: 'Tahun ajaran tidak ditemukan' }, 404);
   }
@@ -176,9 +206,9 @@ masterRouter.delete('/tahun-ajaran/:id', requirePermission('tahun_ajaran', 'hapu
     );
   }
 
-  store.deleteTahunAjaran(id);
+  await store.deleteTahunAjaran(id);
   const user = c.get('user')!;
-  store.createAuditLog({
+  await store.createAuditLog({
     user_id: user.id,
     username: user.username,
     action: 'DELETE',
@@ -197,12 +227,17 @@ masterRouter.delete('/tahun-ajaran/:id', requirePermission('tahun_ajaran', 'hapu
 // 2. KELAS / ROMBEL
 // ==========================================
 masterRouter.get('/kelas', requirePermission('kelas', 'lihat'), async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
   const tingkat = c.req.query('tingkat');
   const search = c.req.query('search');
   const page = Number(c.req.query('page') || 1);
   const limit = Number(c.req.query('limit') || 10);
 
-  const list = store.getKelasList({ tingkat, search, page, limit });
+  const list = await store.getKelasList({ tingkat, search, page, limit });
   return c.json({
     success: true,
     data: list,
@@ -211,11 +246,21 @@ masterRouter.get('/kelas', requirePermission('kelas', 'lihat'), async (c) => {
 });
 
 masterRouter.get('/kelas/simple', async (c) => {
-  const list = store.getAllKelasSimple();
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
+  const list = await store.getAllKelasSimple();
   return c.json({ success: true, data: list });
 });
 
 masterRouter.post('/kelas', requirePermission('kelas', 'tambah'), async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
   const body = await c.req.json().catch(() => ({}));
   const parsed = KelasSchema.safeParse(body);
   if (!parsed.success) {
@@ -228,9 +273,9 @@ masterRouter.post('/kelas', requirePermission('kelas', 'tambah'), async (c) => {
     );
   }
 
-  const created = store.createKelas(parsed.data as any);
+  const created = await store.createKelas(parsed.data as any);
   const user = c.get('user')!;
-  store.createAuditLog({
+  await store.createAuditLog({
     user_id: user.id,
     username: user.username,
     action: 'CREATE',
@@ -250,6 +295,11 @@ masterRouter.post('/kelas', requirePermission('kelas', 'tambah'), async (c) => {
 });
 
 masterRouter.put('/kelas/:id', requirePermission('kelas', 'ubah'), async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
   const id = Number(c.req.param('id'));
   const body = await c.req.json().catch(() => ({}));
   const parsed = KelasSchema.safeParse(body);
@@ -263,13 +313,13 @@ masterRouter.put('/kelas/:id', requirePermission('kelas', 'ubah'), async (c) => 
     );
   }
 
-  const updated = store.updateKelas(id, parsed.data as any);
+  const updated = await store.updateKelas(id, parsed.data as any);
   if (!updated) {
     return c.json({ success: false, message: 'Kelas tidak ditemukan' }, 404);
   }
 
   const user = c.get('user')!;
-  store.createAuditLog({
+  await store.createAuditLog({
     user_id: user.id,
     username: user.username,
     action: 'UPDATE',
@@ -286,15 +336,20 @@ masterRouter.put('/kelas/:id', requirePermission('kelas', 'ubah'), async (c) => 
 });
 
 masterRouter.delete('/kelas/:id', requirePermission('kelas', 'hapus'), async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
   const id = Number(c.req.param('id'));
-  const item = store.getKelasById(id);
+  const item = await store.getKelasById(id);
   if (!item) {
     return c.json({ success: false, message: 'Kelas tidak ditemukan' }, 404);
   }
 
-  store.deleteKelas(id);
+  await store.deleteKelas(id);
   const user = c.get('user')!;
-  store.createAuditLog({
+  await store.createAuditLog({
     user_id: user.id,
     username: user.username,
     action: 'DELETE',
@@ -313,12 +368,17 @@ masterRouter.delete('/kelas/:id', requirePermission('kelas', 'hapus'), async (c)
 // 3. MATA PELAJARAN
 // ==========================================
 masterRouter.get('/mapel', requirePermission('mapel', 'lihat'), async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
   const kelompok = c.req.query('kelompok');
   const search = c.req.query('search');
   const page = Number(c.req.query('page') || 1);
   const limit = Number(c.req.query('limit') || 15);
 
-  const list = store.getMapelList({ kelompok, search, page, limit });
+  const list = await store.getMapelList({ kelompok, search, page, limit });
   return c.json({
     success: true,
     data: list,
@@ -327,11 +387,21 @@ masterRouter.get('/mapel', requirePermission('mapel', 'lihat'), async (c) => {
 });
 
 masterRouter.get('/mapel/simple', async (c) => {
-  const list = store.getAllMapelSimple();
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
+  const list = await store.getAllMapelSimple();
   return c.json({ success: true, data: list });
 });
 
 masterRouter.post('/mapel', requirePermission('mapel', 'tambah'), async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
   const body = await c.req.json().catch(() => ({}));
   const parsed = MapelSchema.safeParse(body);
   if (!parsed.success) {
@@ -344,9 +414,9 @@ masterRouter.post('/mapel', requirePermission('mapel', 'tambah'), async (c) => {
     );
   }
 
-  const created = store.createMapel(parsed.data as any);
+  const created = await store.createMapel(parsed.data as any);
   const user = c.get('user')!;
-  store.createAuditLog({
+  await store.createAuditLog({
     user_id: user.id,
     username: user.username,
     action: 'CREATE',
@@ -366,6 +436,11 @@ masterRouter.post('/mapel', requirePermission('mapel', 'tambah'), async (c) => {
 });
 
 masterRouter.put('/mapel/:id', requirePermission('mapel', 'ubah'), async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
   const id = Number(c.req.param('id'));
   const body = await c.req.json().catch(() => ({}));
   const parsed = MapelSchema.safeParse(body);
@@ -379,13 +454,13 @@ masterRouter.put('/mapel/:id', requirePermission('mapel', 'ubah'), async (c) => 
     );
   }
 
-  const updated = store.updateMapel(id, parsed.data as any);
+  const updated = await store.updateMapel(id, parsed.data as any);
   if (!updated) {
     return c.json({ success: false, message: 'Mata pelajaran tidak ditemukan' }, 404);
   }
 
   const user = c.get('user')!;
-  store.createAuditLog({
+  await store.createAuditLog({
     user_id: user.id,
     username: user.username,
     action: 'UPDATE',
@@ -402,15 +477,20 @@ masterRouter.put('/mapel/:id', requirePermission('mapel', 'ubah'), async (c) => 
 });
 
 masterRouter.delete('/mapel/:id', requirePermission('mapel', 'hapus'), async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
   const id = Number(c.req.param('id'));
-  const item = store.getMapelById(id);
+  const item = await store.getMapelById(id);
   if (!item) {
     return c.json({ success: false, message: 'Mata pelajaran tidak ditemukan' }, 404);
   }
 
-  store.deleteMapel(id);
+  await store.deleteMapel(id);
   const user = c.get('user')!;
-  store.createAuditLog({
+  await store.createAuditLog({
     user_id: user.id,
     username: user.username,
     action: 'DELETE',
@@ -429,12 +509,17 @@ masterRouter.delete('/mapel/:id', requirePermission('mapel', 'hapus'), async (c)
 // 4. GURU & PEGAWAI
 // ==========================================
 masterRouter.get('/guru', requirePermission('guru', 'lihat'), async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
   const search = c.req.query('search');
   const status = c.req.query('status');
   const page = Number(c.req.query('page') || 1);
   const limit = Number(c.req.query('limit') || 10);
 
-  const result = store.getGuruList({
+  const result = await store.getGuruList({
     search,
     status,
     page,
@@ -444,13 +529,23 @@ masterRouter.get('/guru', requirePermission('guru', 'lihat'), async (c) => {
 });
 
 masterRouter.get('/guru/simple', async (c) => {
-  const result = store.getAllGuruSimple();
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
+  const result = await store.getAllGuruSimple();
   return c.json({ success: true, data: result });
 });
 
 masterRouter.get('/guru/:id', requirePermission('guru', 'lihat'), async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
   const id = Number(c.req.param('id'));
-  const item = store.getGuruById(id);
+  const item = await store.getGuruById(id);
   if (!item) {
     return c.json({ success: false, message: 'Data guru tidak ditemukan' }, 404);
   }
@@ -458,6 +553,11 @@ masterRouter.get('/guru/:id', requirePermission('guru', 'lihat'), async (c) => {
 });
 
 masterRouter.post('/guru', requirePermission('guru', 'tambah'), async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
   const body = await c.req.json().catch(() => ({}));
   const parsed = GuruSchema.safeParse(body);
   if (!parsed.success) {
@@ -470,9 +570,9 @@ masterRouter.post('/guru', requirePermission('guru', 'tambah'), async (c) => {
     );
   }
 
-  const created = store.createGuru(parsed.data as any);
+  const created = await store.createGuru(parsed.data as any);
   const user = c.get('user')!;
-  store.createAuditLog({
+  await store.createAuditLog({
     user_id: user.id,
     username: user.username,
     action: 'CREATE',
@@ -492,6 +592,11 @@ masterRouter.post('/guru', requirePermission('guru', 'tambah'), async (c) => {
 });
 
 masterRouter.put('/guru/:id', requirePermission('guru', 'ubah'), async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
   const id = Number(c.req.param('id'));
   const body = await c.req.json().catch(() => ({}));
   const parsed = GuruSchema.safeParse(body);
@@ -505,13 +610,13 @@ masterRouter.put('/guru/:id', requirePermission('guru', 'ubah'), async (c) => {
     );
   }
 
-  const updated = store.updateGuru(id, parsed.data as any);
+  const updated = await store.updateGuru(id, parsed.data as any);
   if (!updated) {
     return c.json({ success: false, message: 'Data guru tidak ditemukan' }, 404);
   }
 
   const user = c.get('user')!;
-  store.createAuditLog({
+  await store.createAuditLog({
     user_id: user.id,
     username: user.username,
     action: 'UPDATE',
@@ -528,15 +633,20 @@ masterRouter.put('/guru/:id', requirePermission('guru', 'ubah'), async (c) => {
 });
 
 masterRouter.delete('/guru/:id', requirePermission('guru', 'hapus'), async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
   const id = Number(c.req.param('id'));
-  const item = store.getGuruById(id);
+  const item = await store.getGuruById(id);
   if (!item) {
     return c.json({ success: false, message: 'Data guru tidak ditemukan' }, 404);
   }
 
-  store.deleteGuru(id);
+  await store.deleteGuru(id);
   const user = c.get('user')!;
-  store.createAuditLog({
+  await store.createAuditLog({
     user_id: user.id,
     username: user.username,
     action: 'DELETE',
@@ -555,13 +665,18 @@ masterRouter.delete('/guru/:id', requirePermission('guru', 'hapus'), async (c) =
 // 5. DATA SISWA & IMPORT / EXPORT EXCEL
 // ==========================================
 masterRouter.get('/siswa', requirePermission('siswa', 'lihat'), async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
   const search = c.req.query('search');
   const kelas_id = c.req.query('kelas_id') ? Number(c.req.query('kelas_id')) : undefined;
   const status = c.req.query('status');
   const page = Number(c.req.query('page') || 1);
   const limit = Number(c.req.query('limit') || 10);
 
-  const result = store.getSiswaList({
+  const result = await store.getSiswaList({
     search,
     kelas_id,
     status,
@@ -573,10 +688,15 @@ masterRouter.get('/siswa', requirePermission('siswa', 'lihat'), async (c) => {
 
 // EKSPOR KE EXCEL (.xlsx)
 masterRouter.get('/siswa/export', requirePermission('siswa', 'lihat'), async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
   const kelas_id = c.req.query('kelas_id') ? Number(c.req.query('kelas_id')) : undefined;
   const status = c.req.query('status');
 
-  const siswaData = store.getAllSiswaForExport({
+  const siswaData = await store.getAllSiswaForExport({
     kelas_id,
     status,
   });
@@ -587,7 +707,7 @@ masterRouter.get('/siswa/export', requirePermission('siswa', 'lihat'), async (c)
     NISN: s.nisn,
     'Nama Lengkap': s.nama,
     'L/P': s.jenis_kelamin,
-    Kelas: s.kelas_nama,
+    Kelas: s.kelas_nama || '-',
     'Tempat Lahir': s.tempat_lahir || '-',
     'Tanggal Lahir': s.tanggal_lahir || '-',
     Status: s.status.toUpperCase(),
@@ -621,7 +741,7 @@ masterRouter.get('/siswa/export', requirePermission('siswa', 'lihat'), async (c)
   const buffer = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
 
   const user = c.get('user')!;
-  store.createAuditLog({
+  await store.createAuditLog({
     user_id: user.id,
     username: user.username,
     action: 'EXPORT',
@@ -688,6 +808,11 @@ masterRouter.get('/siswa/template', requirePermission('siswa', 'lihat'), async (
 // IMPOR SISWA DARI FILE EXCEL / CSV
 masterRouter.post('/siswa/import', requirePermission('siswa', 'tambah'), async (c) => {
   try {
+    const store = getStore(c.env?.DATABASE_URL);
+    if (!store) {
+      return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+    }
+
     const body = await c.req.json().catch(() => ({}));
     const { rows } = body;
     if (!rows || !Array.isArray(rows) || rows.length === 0) {
@@ -700,8 +825,8 @@ masterRouter.post('/siswa/import', requirePermission('siswa', 'tambah'), async (
       );
     }
 
-    const activeTa = store.getActiveTahunAjaran();
-    const allKelas = store.getAllKelasSimple();
+    const activeTa = await store.getActiveTahunAjaran();
+    const allKelas = await store.getAllKelasSimple();
 
     const validList: any[] = [];
     const errors: string[] = [];
@@ -764,10 +889,10 @@ masterRouter.post('/siswa/import', requirePermission('siswa', 'tambah'), async (
       );
     }
 
-    const imported = store.batchCreateSiswa(validList);
+    const imported = await store.batchCreateSiswa(validList);
     const user = c.get('user')!;
 
-    store.createAuditLog({
+    await store.createAuditLog({
       user_id: user.id,
       username: user.username,
       action: 'IMPORT',
@@ -800,8 +925,13 @@ masterRouter.post('/siswa/import', requirePermission('siswa', 'tambah'), async (
 });
 
 masterRouter.get('/siswa/:id', requirePermission('siswa', 'lihat'), async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
   const id = Number(c.req.param('id'));
-  const item = store.getSiswaById(id);
+  const item = await store.getSiswaById(id);
   if (!item) {
     return c.json({ success: false, message: 'Data siswa tidak ditemukan' }, 404);
   }
@@ -809,6 +939,11 @@ masterRouter.get('/siswa/:id', requirePermission('siswa', 'lihat'), async (c) =>
 });
 
 masterRouter.post('/siswa', requirePermission('siswa', 'tambah'), async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
   const body = await c.req.json().catch(() => ({}));
   const parsed = SiswaSchema.safeParse(body);
   if (!parsed.success) {
@@ -821,9 +956,9 @@ masterRouter.post('/siswa', requirePermission('siswa', 'tambah'), async (c) => {
     );
   }
 
-  const created = store.createSiswa(parsed.data as any);
+  const created = await store.createSiswa(parsed.data as any);
   const user = c.get('user')!;
-  store.createAuditLog({
+  await store.createAuditLog({
     user_id: user.id,
     username: user.username,
     action: 'CREATE',
@@ -843,6 +978,11 @@ masterRouter.post('/siswa', requirePermission('siswa', 'tambah'), async (c) => {
 });
 
 masterRouter.put('/siswa/:id', requirePermission('siswa', 'ubah'), async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
   const id = Number(c.req.param('id'));
   const body = await c.req.json().catch(() => ({}));
   const parsed = SiswaSchema.safeParse(body);
@@ -856,13 +996,13 @@ masterRouter.put('/siswa/:id', requirePermission('siswa', 'ubah'), async (c) => 
     );
   }
 
-  const updated = store.updateSiswa(id, parsed.data as any);
+  const updated = await store.updateSiswa(id, parsed.data as any);
   if (!updated) {
     return c.json({ success: false, message: 'Data siswa tidak ditemukan' }, 404);
   }
 
   const user = c.get('user')!;
-  store.createAuditLog({
+  await store.createAuditLog({
     user_id: user.id,
     username: user.username,
     action: 'UPDATE',
@@ -879,15 +1019,20 @@ masterRouter.put('/siswa/:id', requirePermission('siswa', 'ubah'), async (c) => 
 });
 
 masterRouter.delete('/siswa/:id', requirePermission('siswa', 'hapus'), async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
   const id = Number(c.req.param('id'));
-  const item = store.getSiswaById(id);
+  const item = await store.getSiswaById(id);
   if (!item) {
     return c.json({ success: false, message: 'Data siswa tidak ditemukan' }, 404);
   }
 
-  store.deleteSiswa(id);
+  await store.deleteSiswa(id);
   const user = c.get('user')!;
-  store.createAuditLog({
+  await store.createAuditLog({
     user_id: user.id,
     username: user.username,
     action: 'DELETE',
@@ -903,10 +1048,15 @@ masterRouter.delete('/siswa/:id', requirePermission('siswa', 'hapus'), async (c)
 });
 
 // ==========================================
-// 6. PENGATURAN PROFIL MADRASAH
+// 6. PENGATURAN PROFIL MADRASAH (INTEGRASI DATABASE)
 // ==========================================
 masterRouter.get('/pengaturan', requirePermission('pengaturan', 'lihat'), async (c) => {
-  const profile = store.getMadrasahProfile();
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
+  const profile = await store.getMadrasahProfile();
   return c.json({
     success: true,
     data: profile,
@@ -915,6 +1065,11 @@ masterRouter.get('/pengaturan', requirePermission('pengaturan', 'lihat'), async 
 });
 
 masterRouter.put('/pengaturan', requirePermission('pengaturan', 'ubah'), async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
   const body = await c.req.json().catch(() => ({}));
   const parsed = MadrasahProfileSchema.safeParse(body);
   if (!parsed.success) {
@@ -927,9 +1082,9 @@ masterRouter.put('/pengaturan', requirePermission('pengaturan', 'ubah'), async (
     );
   }
 
-  const updated = store.updateMadrasahProfile(parsed.data as any);
+  const updated = await store.updateMadrasahProfile(parsed.data as any);
   const user = c.get('user')!;
-  store.createAuditLog({
+  await store.createAuditLog({
     user_id: user.id,
     username: user.username,
     action: 'UPDATE',
@@ -941,7 +1096,58 @@ masterRouter.put('/pengaturan', requirePermission('pengaturan', 'ubah'), async (
   return c.json({
     success: true,
     data: updated,
-    message: 'Pengaturan profil madrasah berhasil disimpan.',
+    message: 'Pengaturan profil madrasah berhasil disimpan ke Neon DB.',
+  });
+});
+
+// Alias endpoint /madrasah-profile jika dipanggil
+masterRouter.get('/madrasah-profile', async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
+  const profile = await store.getMadrasahProfile();
+  return c.json({
+    success: true,
+    data: profile,
+    message: 'Profil madrasah berhasil diambil dari Neon DB.',
+  });
+});
+
+masterRouter.put('/madrasah-profile', async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = MadrasahProfileSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json(
+      {
+        success: false,
+        message: parsed.error.issues[0]?.message || 'Input profil tidak valid',
+      },
+      400
+    );
+  }
+
+  const updated = await store.updateMadrasahProfile(parsed.data as any);
+  const user = c.get('user')!;
+  await store.createAuditLog({
+    user_id: user.id,
+    username: user.username,
+    action: 'UPDATE',
+    entity: 'madrasah_profile',
+    details: `Memperbarui profil madrasah via website`,
+    ip_address: getClientIp(c),
+  });
+
+  return c.json({
+    success: true,
+    data: updated,
+    message: 'Pengaturan profil madrasah berhasil disimpan ke Neon DB.',
   });
 });
 
@@ -949,13 +1155,18 @@ masterRouter.put('/pengaturan', requirePermission('pengaturan', 'ubah'), async (
 // 7. AUDIT LOG
 // ==========================================
 masterRouter.get('/audit-log', requirePermission('audit_log', 'lihat'), async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json({ success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' }, 500);
+  }
+
   const entity = c.req.query('entity');
   const action = c.req.query('action');
   const search = c.req.query('search');
   const page = Number(c.req.query('page') || 1);
   const limit = Number(c.req.query('limit') || 20);
 
-  const result = store.getAuditLogs({
+  const result = await store.getAuditLogs({
     entity,
     action,
     search,
@@ -1007,7 +1218,6 @@ masterRouter.post('/upload', async (c) => {
       const signature = await getSignedUploadParams(c.env, targetFolder);
 
       if (signature) {
-        // Upload langsung ke Cloudinary API menggunakan Web fetch standar
         const formData = new FormData();
         formData.append('file', file);
         formData.append('api_key', c.env.CLOUDINARY_API_KEY!);
@@ -1034,7 +1244,6 @@ masterRouter.post('/upload', async (c) => {
       }
     }
 
-    // Fallback simpan data URI langsung
     return c.json({
       success: true,
       data: { url: file },

@@ -1,15 +1,23 @@
 import { Hono } from 'hono';
 import { AppContext } from '../types.ts';
 import { authMiddleware } from '../auth.ts';
-import { store } from '../store.ts';
+import { getStore } from '../store.ts';
 
 export const dashboardRouter = new Hono<AppContext>();
 
 dashboardRouter.use('*', authMiddleware);
 
 dashboardRouter.get('/stats', async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json(
+      { success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' },
+      500
+    );
+  }
+
   const user = c.get('user')!;
-  const stats = store.getDashboardStats(user.guru_id);
+  const stats = await store.getDashboardStats(user.guru_id);
 
   return c.json({
     success: true,

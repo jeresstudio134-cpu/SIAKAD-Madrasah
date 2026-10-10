@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { AppContext } from '../types.ts';
 import { authMiddleware, hashPassword } from '../auth.ts';
-import { store } from '../store.ts';
+import { getStore } from '../store.ts';
 import { StafCreateSchema, StafUpdateSchema } from '../zod-schemas.ts';
 
 export const stafRouter = new Hono<AppContext>();
@@ -33,7 +33,15 @@ function getClientIp(c: any): string {
 
 // 1. LIST SEMUA STAF
 stafRouter.get('/', async (c) => {
-  const staffList = store.getAllStaf();
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json(
+      { success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' },
+      500
+    );
+  }
+
+  const staffList = await store.getAllStaf();
   return c.json({
     success: true,
     data: staffList,
@@ -44,6 +52,14 @@ stafRouter.get('/', async (c) => {
 // 2. TAMBAH STAF BARU
 stafRouter.post('/', async (c) => {
   try {
+    const store = getStore(c.env?.DATABASE_URL);
+    if (!store) {
+      return c.json(
+        { success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' },
+        500
+      );
+    }
+
     const body = await c.req.json().catch(() => ({}));
     const parseResult = StafCreateSchema.safeParse(body);
     if (!parseResult.success) {
@@ -59,7 +75,8 @@ stafRouter.post('/', async (c) => {
     const { username, nama_lengkap, email, password, staf_role, is_active, permissions } =
       parseResult.data;
 
-    if (store.getUserByUsername(username)) {
+    const existingUser = await store.getUserByUsername(username);
+    if (existingUser) {
       return c.json(
         {
           success: false,
@@ -82,7 +99,7 @@ stafRouter.post('/', async (c) => {
       { module: 'audit_log', can_view: false, can_create: false, can_edit: false, can_delete: false },
     ];
 
-    const newUser = store.createUser({
+    const newUser = await store.createUser({
       username,
       nama_lengkap,
       email,
@@ -95,7 +112,7 @@ stafRouter.post('/', async (c) => {
     });
 
     const user = c.get('user')!;
-    store.createAuditLog({
+    await store.createAuditLog({
       user_id: user.id,
       username: user.username,
       action: 'CREATE',
@@ -129,8 +146,16 @@ stafRouter.post('/', async (c) => {
 // 3. UPDATE STAF & HAK AKSES
 stafRouter.put('/:id', async (c) => {
   try {
+    const store = getStore(c.env?.DATABASE_URL);
+    if (!store) {
+      return c.json(
+        { success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' },
+        500
+      );
+    }
+
     const id = Number(c.req.param('id'));
-    const existing = store.getUserById(id);
+    const existing = await store.getUserById(id);
     if (!existing || existing.role !== 'staf') {
       return c.json(
         {
@@ -167,10 +192,10 @@ stafRouter.put('/:id', async (c) => {
       updatePayload.password_hash = await hashPassword(password.trim());
     }
 
-    const updated = store.updateUser(id, updatePayload);
+    const updated = await store.updateUser(id, updatePayload);
     const user = c.get('user')!;
 
-    store.createAuditLog({
+    await store.createAuditLog({
       user_id: user.id,
       username: user.username,
       action: 'UPDATE',
@@ -200,8 +225,16 @@ stafRouter.put('/:id', async (c) => {
 
 // 4. TOGGLE STATUS AKTIF / NONAKTIF
 stafRouter.patch('/:id/status', async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json(
+      { success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' },
+      500
+    );
+  }
+
   const id = Number(c.req.param('id'));
-  const existing = store.getUserById(id);
+  const existing = await store.getUserById(id);
   if (!existing || existing.role !== 'staf') {
     return c.json(
       {
@@ -213,10 +246,10 @@ stafRouter.patch('/:id/status', async (c) => {
   }
 
   const newStatus = !existing.is_active;
-  const updated = store.updateUser(id, { is_active: newStatus });
+  const updated = await store.updateUser(id, { is_active: newStatus });
   const user = c.get('user')!;
 
-  store.createAuditLog({
+  await store.createAuditLog({
     user_id: user.id,
     username: user.username,
     action: 'UPDATE',
@@ -234,8 +267,16 @@ stafRouter.patch('/:id/status', async (c) => {
 
 // 5. HAPUS AKUN STAF
 stafRouter.delete('/:id', async (c) => {
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json(
+      { success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' },
+      500
+    );
+  }
+
   const id = Number(c.req.param('id'));
-  const existing = store.getUserById(id);
+  const existing = await store.getUserById(id);
   if (!existing || existing.role !== 'staf') {
     return c.json(
       {
@@ -246,10 +287,10 @@ stafRouter.delete('/:id', async (c) => {
     );
   }
 
-  store.deleteUser(id);
+  await store.deleteUser(id);
   const user = c.get('user')!;
 
-  store.createAuditLog({
+  await store.createAuditLog({
     user_id: user.id,
     username: user.username,
     action: 'DELETE',

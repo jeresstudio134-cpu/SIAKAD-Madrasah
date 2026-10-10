@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { AppContext } from '../types.ts';
 import { authMiddleware } from '../auth.ts';
-import { store } from '../store.ts';
+import { getStore } from '../store.ts';
 import { getSignedUploadParams, isCloudinaryConfigured } from '../cloudinary.ts';
 
 export const ppdbRouter = new Hono<AppContext>();
@@ -35,6 +35,14 @@ function ensurePPDBStaff(c: any, next: () => Promise<void>) {
   );
 }
 
+function getClientIp(c: any): string {
+  return (
+    c.req.header('cf-connecting-ip') ||
+    c.req.header('x-forwarded-for')?.split(',')[0].trim() ||
+    '127.0.0.1'
+  );
+}
+
 // ==========================================
 // 1. PUBLIC ROUTES (Tanpa Login)
 // ==========================================
@@ -42,9 +50,25 @@ function ensurePPDBStaff(c: any, next: () => Promise<void>) {
 // Info publik PPDB
 ppdbRouter.get('/info', async (c) => {
   try {
-    const taAktif = store.getActiveTahunAjaran();
-    const stats = store.getPPDBStats(taAktif?.id);
-    const profile = store.getMadrasahProfile();
+    const store = getStore(c.env?.DATABASE_URL);
+    if (!store) {
+      return c.json(
+        { success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' },
+        500
+      );
+    }
+
+    const taAktif = await store.getActiveTahunAjaran();
+    const stats = await store.getPPDBStats(taAktif?.id);
+    const profile = (await store.getMadrasahProfile()) || {
+      nama: 'Madrasah Tsanawiyah',
+      nsm: '-',
+      npsn: '-',
+      alamat: '-',
+      telepon: '-',
+      email: '-',
+      logo_url: null,
+    };
 
     return c.json({
       success: true,
@@ -91,8 +115,8 @@ ppdbRouter.get('/info', async (c) => {
           'Scan Kartu Keluarga (KK)',
         ],
         stats: {
-          totalPendaftar: stats.totalPendaftar,
-          targetKuota: stats.targetKuota,
+          totalPendaftar: stats.total,
+          targetKuota: 120,
         },
       },
     });
@@ -160,6 +184,14 @@ ppdbRouter.post('/upload', async (c) => {
 // Pendaftaran santri baru (Publik)
 ppdbRouter.post('/daftar', async (c) => {
   try {
+    const store = getStore(c.env?.DATABASE_URL);
+    if (!store) {
+      return c.json(
+        { success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' },
+        500
+      );
+    }
+
     const body = await c.req.json().catch(() => ({}));
     const {
       nama_lengkap,
@@ -192,7 +224,7 @@ ppdbRouter.post('/daftar', async (c) => {
       );
     }
 
-    const pendaftar = store.createPPDBPendaftar({
+    const pendaftar = await store.createPPDB({
       nama_lengkap,
       nisn,
       nik,
@@ -229,14 +261,22 @@ ppdbRouter.post('/daftar', async (c) => {
 // Cek status pendaftaran secara publik
 ppdbRouter.get('/cek/:nomor', async (c) => {
   try {
+    const store = getStore(c.env?.DATABASE_URL);
+    if (!store) {
+      return c.json(
+        { success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' },
+        500
+      );
+    }
+
     const nomor = c.req.param('nomor');
-    const pendaftar = store.getPPDBByNomor(nomor);
+    const pendaftar = await store.getPPDBByNomor(nomor);
 
     if (!pendaftar) {
       return c.json(
         {
           success: false,
-          message: `Data pendaftaran dengan nomor atau NISN "${nomor}" tidak ditemukan. Pastikan nomor yang dimasukkan benar.`,
+          message: `Data pendaftaran dengan nomor "${nomor}" tidak ditemukan. Pastikan nomor yang dimasukkan benar.`,
         },
         404
       );
@@ -258,6 +298,14 @@ ppdbRouter.get('/cek/:nomor', async (c) => {
 // Daftar seluruh pendaftar
 ppdbRouter.get('/pendaftar', authMiddleware, ensurePPDBStaff, async (c) => {
   try {
+    const store = getStore(c.env?.DATABASE_URL);
+    if (!store) {
+      return c.json(
+        { success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' },
+        500
+      );
+    }
+
     const status = c.req.query('status');
     const jalur = c.req.query('jalur');
     const tahun_ajaran_id = c.req.query('tahun_ajaran_id')
@@ -267,7 +315,7 @@ ppdbRouter.get('/pendaftar', authMiddleware, ensurePPDBStaff, async (c) => {
     const page = Number(c.req.query('page') || 1);
     const limit = Number(c.req.query('limit') || 15);
 
-    const result = store.getPPDBList({
+    const result = await store.getPPDBList({
       status,
       jalur,
       tahun_ajaran_id,
@@ -288,8 +336,16 @@ ppdbRouter.get('/pendaftar', authMiddleware, ensurePPDBStaff, async (c) => {
 // Detail pendaftar
 ppdbRouter.get('/pendaftar/:id', authMiddleware, ensurePPDBStaff, async (c) => {
   try {
+    const store = getStore(c.env?.DATABASE_URL);
+    if (!store) {
+      return c.json(
+        { success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' },
+        500
+      );
+    }
+
     const id = Number(c.req.param('id'));
-    const data = store.getPPDBById(id);
+    const data = await store.getPPDBById(id);
     if (!data) {
       return c.json({ success: false, message: 'Data pendaftar tidak ditemukan.' }, 404);
     }
@@ -302,6 +358,14 @@ ppdbRouter.get('/pendaftar/:id', authMiddleware, ensurePPDBStaff, async (c) => {
 // Verifikasi pendaftar (Ubah status: terverifikasi, diterima, cadangan, ditolak)
 ppdbRouter.put('/pendaftar/:id/verifikasi', authMiddleware, ensurePPDBStaff, async (c) => {
   try {
+    const store = getStore(c.env?.DATABASE_URL);
+    if (!store) {
+      return c.json(
+        { success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' },
+        500
+      );
+    }
+
     const id = Number(c.req.param('id'));
     const body = await c.req.json().catch(() => ({}));
     const { status, catatan_verifikasi } = body;
@@ -317,11 +381,23 @@ ppdbRouter.put('/pendaftar/:id/verifikasi', authMiddleware, ensurePPDBStaff, asy
     }
 
     const user = c.get('user')!;
-    const updated = store.verifikasiPPDB(id, {
+    const updated = await store.verifikasiPPDB(id, {
       status,
       catatan_verifikasi,
       user_id: user.id,
-      username: user.nama_lengkap || user.username,
+    });
+
+    if (!updated) {
+      return c.json({ success: false, message: 'Data pendaftar tidak ditemukan.' }, 404);
+    }
+
+    await store.createAuditLog({
+      user_id: user.id,
+      username: user.username,
+      action: 'UPDATE',
+      entity: 'ppdb',
+      details: `Verifikasi pendaftaran ${updated.nomor_pendaftaran} menjadi ${updated.status}`,
+      ip_address: getClientIp(c),
     });
 
     return c.json({
@@ -337,22 +413,41 @@ ppdbRouter.put('/pendaftar/:id/verifikasi', authMiddleware, ensurePPDBStaff, asy
 // Konversi calon siswa diterima menjadi siswa aktif
 ppdbRouter.post('/pendaftar/:id/konversi', authMiddleware, ensurePPDBStaff, async (c) => {
   try {
+    const store = getStore(c.env?.DATABASE_URL);
+    if (!store) {
+      return c.json(
+        { success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' },
+        500
+      );
+    }
+
     const id = Number(c.req.param('id'));
     const body = await c.req.json().catch(() => ({}));
     const { kelas_id, nis } = body;
 
+    const ta = await store.getActiveTahunAjaran();
+    const tahun_ajaran_id = ta ? ta.id : 1;
+
     const user = c.get('user')!;
-    const result = store.konversiPPDBSiswa(id, {
-      kelas_id: kelas_id ? Number(kelas_id) : undefined,
+    const siswaCreated = await store.konversiPPDBSiswa(id, {
+      kelas_id: Number(kelas_id),
       nis,
+      tahun_ajaran_id,
+    });
+
+    await store.createAuditLog({
       user_id: user.id,
-      username: user.nama_lengkap || user.username,
+      username: user.username,
+      action: 'CREATE',
+      entity: 'ppdb',
+      details: `Konversi calon santri PPDB ID: ${id} menjadi siswa aktif (NIS: ${siswaCreated.nis})`,
+      ip_address: getClientIp(c),
     });
 
     return c.json({
       success: true,
-      data: result,
-      message: `Calon siswa ${result.ppdb.nama_lengkap} berhasil dikonversi menjadi siswa aktif (NIS: ${result.siswa.nis}).`,
+      data: siswaCreated,
+      message: `Calon siswa ${siswaCreated.nama} berhasil dikonversi menjadi siswa aktif (NIS: ${siswaCreated.nis}).`,
     });
   } catch (err: any) {
     return c.json({ success: false, message: err.message }, 400);
@@ -362,10 +457,18 @@ ppdbRouter.post('/pendaftar/:id/konversi', authMiddleware, ensurePPDBStaff, asyn
 // Statistik PPDB
 ppdbRouter.get('/stats', authMiddleware, ensurePPDBStaff, async (c) => {
   try {
+    const store = getStore(c.env?.DATABASE_URL);
+    if (!store) {
+      return c.json(
+        { success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' },
+        500
+      );
+    }
+
     const taId = c.req.query('tahun_ajaran_id')
       ? Number(c.req.query('tahun_ajaran_id'))
       : undefined;
-    const stats = store.getPPDBStats(taId);
+    const stats = await store.getPPDBStats(taId);
     return c.json({ success: true, data: stats });
   } catch (err: any) {
     return c.json({ success: false, message: err.message }, 500);

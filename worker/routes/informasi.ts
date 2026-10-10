@@ -1,9 +1,17 @@
 import { Hono } from 'hono';
 import { AppContext } from '../types.ts';
 import { authMiddleware, requirePermission } from '../auth.ts';
-import { store } from '../store.ts';
+import { getStore } from '../store.ts';
 
 export const informasiRouter = new Hono<AppContext>();
+
+function getClientIp(c: any): string {
+  return (
+    c.req.header('cf-connecting-ip') ||
+    c.req.header('x-forwarded-for')?.split(',')[0].trim() ||
+    '127.0.0.1'
+  );
+}
 
 // ==========================================
 // 1. PENGUMUMAN
@@ -12,16 +20,24 @@ export const informasiRouter = new Hono<AppContext>();
 // Daftar pengumuman (bisa diakses publik atau sesuai role user)
 informasiRouter.get('/pengumuman', async (c) => {
   try {
+    const store = getStore(c.env?.DATABASE_URL);
+    if (!store) {
+      return c.json(
+        { success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' },
+        500
+      );
+    }
+
     const target_audiens = c.req.query('target_audiens');
     const kategori = c.req.query('kategori');
     const search = c.req.query('search');
 
-    const list = store.getPengumumanList({
+    const result = await store.getPengumumanList({
       target_audiens,
       kategori,
       search,
     });
-    return c.json({ success: true, data: list });
+    return c.json({ success: true, data: result.items });
   } catch (err: any) {
     return c.json({ success: false, message: err.message }, 500);
   }
@@ -29,8 +45,16 @@ informasiRouter.get('/pengumuman', async (c) => {
 
 informasiRouter.get('/pengumuman/:id', async (c) => {
   try {
+    const store = getStore(c.env?.DATABASE_URL);
+    if (!store) {
+      return c.json(
+        { success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' },
+        500
+      );
+    }
+
     const id = Number(c.req.param('id'));
-    const item = store.getPengumumanById(id);
+    const item = await store.getPengumumanById(id);
     if (!item) {
       return c.json({ success: false, message: 'Pengumuman tidak ditemukan.' }, 404);
     }
@@ -47,6 +71,14 @@ informasiRouter.post(
   requirePermission('pengumuman', 'tambah'),
   async (c) => {
     try {
+      const store = getStore(c.env?.DATABASE_URL);
+      if (!store) {
+        return c.json(
+          { success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' },
+          500
+        );
+      }
+
       const body = await c.req.json().catch(() => ({}));
       const { judul, konten, kategori, target_audiens, is_pinned, is_published } = body;
       if (!judul || !konten) {
@@ -60,18 +92,24 @@ informasiRouter.post(
       }
 
       const user = c.get('user')!;
-      const created = store.createPengumuman(
-        {
-          judul,
-          konten,
-          kategori,
-          target_audiens,
-          is_pinned,
-          is_published,
-        },
-        user.id,
-        user.nama_lengkap || user.username
-      );
+      const created = await store.createPengumuman({
+        judul,
+        konten,
+        kategori: kategori || 'Umum',
+        target_audiens: target_audiens || 'Semua',
+        is_pinned: Boolean(is_pinned),
+        is_published: is_published !== false,
+        created_by_user_id: user.id,
+      });
+
+      await store.createAuditLog({
+        user_id: user.id,
+        username: user.username,
+        action: 'CREATE',
+        entity: 'pengumuman',
+        details: `Membuat pengumuman: ${judul}`,
+        ip_address: getClientIp(c),
+      });
 
       return c.json(
         {
@@ -94,15 +132,27 @@ informasiRouter.put(
   requirePermission('pengumuman', 'ubah'),
   async (c) => {
     try {
+      const store = getStore(c.env?.DATABASE_URL);
+      if (!store) {
+        return c.json(
+          { success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' },
+          500
+        );
+      }
+
       const id = Number(c.req.param('id'));
       const body = await c.req.json().catch(() => ({}));
       const user = c.get('user')!;
-      const updated = store.updatePengumuman(
-        id,
-        body,
-        user.id,
-        user.nama_lengkap || user.username
-      );
+      const updated = await store.updatePengumuman(id, body);
+
+      await store.createAuditLog({
+        user_id: user.id,
+        username: user.username,
+        action: 'UPDATE',
+        entity: 'pengumuman',
+        details: `Memperbarui pengumuman ID: ${id}`,
+        ip_address: getClientIp(c),
+      });
 
       return c.json({
         success: true,
@@ -122,17 +172,30 @@ informasiRouter.delete(
   requirePermission('pengumuman', 'hapus'),
   async (c) => {
     try {
+      const store = getStore(c.env?.DATABASE_URL);
+      if (!store) {
+        return c.json(
+          { success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' },
+          500
+        );
+      }
+
       const id = Number(c.req.param('id'));
       const user = c.get('user')!;
-      const ok = store.deletePengumuman(
-        id,
-        user.id,
-        user.nama_lengkap || user.username
-      );
+      const ok = await store.deletePengumuman(id);
 
       if (!ok) {
         return c.json({ success: false, message: 'Pengumuman tidak ditemukan.' }, 404);
       }
+
+      await store.createAuditLog({
+        user_id: user.id,
+        username: user.username,
+        action: 'DELETE',
+        entity: 'pengumuman',
+        details: `Menghapus pengumuman ID: ${id}`,
+        ip_address: getClientIp(c),
+      });
 
       return c.json({
         success: true,
@@ -150,13 +213,23 @@ informasiRouter.delete(
 
 informasiRouter.get('/kalender', async (c) => {
   try {
+    const store = getStore(c.env?.DATABASE_URL);
+    if (!store) {
+      return c.json(
+        { success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' },
+        500
+      );
+    }
+
     const tahun_ajaran_id = c.req.query('tahun_ajaran_id')
       ? Number(c.req.query('tahun_ajaran_id'))
       : undefined;
+    const bulan = c.req.query('bulan');
     const search = c.req.query('search');
 
-    const list = store.getKalenderList({
+    const list = await store.getKalenderList({
       tahun_ajaran_id,
+      bulan,
       search,
     });
     return c.json({ success: true, data: list });
@@ -167,8 +240,16 @@ informasiRouter.get('/kalender', async (c) => {
 
 informasiRouter.get('/kalender/:id', async (c) => {
   try {
+    const store = getStore(c.env?.DATABASE_URL);
+    if (!store) {
+      return c.json(
+        { success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' },
+        500
+      );
+    }
+
     const id = Number(c.req.param('id'));
-    const item = store.getKalenderById(id);
+    const item = await store.getKalenderById(id);
     if (!item) {
       return c.json({ success: false, message: 'Agenda kalender tidak ditemukan.' }, 404);
     }
@@ -184,6 +265,14 @@ informasiRouter.post(
   requirePermission('kalender', 'tambah'),
   async (c) => {
     try {
+      const store = getStore(c.env?.DATABASE_URL);
+      if (!store) {
+        return c.json(
+          { success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' },
+          500
+        );
+      }
+
       const body = await c.req.json().catch(() => ({}));
       const {
         tahun_ajaran_id,
@@ -205,20 +294,26 @@ informasiRouter.post(
         );
       }
 
+      const ta = await store.getActiveTahunAjaran();
       const user = c.get('user')!;
-      const created = store.createKalender(
-        {
-          tahun_ajaran_id: tahun_ajaran_id || 1,
-          judul_kegiatan,
-          deskripsi,
-          tanggal_mulai,
-          tanggal_selesai,
-          tipe_kegiatan,
-          warna,
-        },
-        user.id,
-        user.nama_lengkap || user.username
-      );
+      const created = await store.createKalender({
+        tahun_ajaran_id: tahun_ajaran_id ? Number(tahun_ajaran_id) : (ta ? ta.id : 1),
+        judul_kegiatan,
+        deskripsi: deskripsi || null,
+        tanggal_mulai,
+        tanggal_selesai: tanggal_selesai || tanggal_mulai,
+        tipe_kegiatan: tipe_kegiatan || 'KBM',
+        warna: warna || 'emerald',
+      });
+
+      await store.createAuditLog({
+        user_id: user.id,
+        username: user.username,
+        action: 'CREATE',
+        entity: 'kalender',
+        details: `Menambah agenda kalender: ${judul_kegiatan}`,
+        ip_address: getClientIp(c),
+      });
 
       return c.json(
         {
@@ -240,15 +335,27 @@ informasiRouter.put(
   requirePermission('kalender', 'ubah'),
   async (c) => {
     try {
+      const store = getStore(c.env?.DATABASE_URL);
+      if (!store) {
+        return c.json(
+          { success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' },
+          500
+        );
+      }
+
       const id = Number(c.req.param('id'));
       const body = await c.req.json().catch(() => ({}));
       const user = c.get('user')!;
-      const updated = store.updateKalender(
-        id,
-        body,
-        user.id,
-        user.nama_lengkap || user.username
-      );
+      const updated = await store.updateKalender(id, body);
+
+      await store.createAuditLog({
+        user_id: user.id,
+        username: user.username,
+        action: 'UPDATE',
+        entity: 'kalender',
+        details: `Memperbarui agenda kalender ID: ${id}`,
+        ip_address: getClientIp(c),
+      });
 
       return c.json({
         success: true,
@@ -267,17 +374,30 @@ informasiRouter.delete(
   requirePermission('kalender', 'hapus'),
   async (c) => {
     try {
+      const store = getStore(c.env?.DATABASE_URL);
+      if (!store) {
+        return c.json(
+          { success: false, message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).' },
+          500
+        );
+      }
+
       const id = Number(c.req.param('id'));
       const user = c.get('user')!;
-      const ok = store.deleteKalender(
-        id,
-        user.id,
-        user.nama_lengkap || user.username
-      );
+      const ok = await store.deleteKalender(id);
 
       if (!ok) {
         return c.json({ success: false, message: 'Agenda kalender tidak ditemukan.' }, 404);
       }
+
+      await store.createAuditLog({
+        user_id: user.id,
+        username: user.username,
+        action: 'DELETE',
+        entity: 'kalender',
+        details: `Menghapus agenda kalender ID: ${id}`,
+        ip_address: getClientIp(c),
+      });
 
       return c.json({
         success: true,

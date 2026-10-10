@@ -1,24 +1,16 @@
-import { neon, Pool } from '@neondatabase/serverless';
-import { drizzle as drizzleHttp } from 'drizzle-orm/neon-http';
-import { drizzle as drizzleWs } from 'drizzle-orm/neon-serverless';
+import { neon } from '@neondatabase/serverless';
+import { drizzle } from 'drizzle-orm/neon-http';
 import * as schema from '../db/schema.ts';
 
 /**
- * Koneksi HTTP Neon untuk query biasa (non-transaksional)
- * Sangat ringan dan efisien di Cloudflare Workers.
+ * Helper koneksi HTTP Neon untuk Cloudflare Workers & Hono API.
+ * Dibuat on-demand per request menggunakan databaseUrl (dari c.env.DATABASE_URL).
+ * Tidak menggunakan process.env atau koneksi global.
  */
 export function getDb(databaseUrl?: string) {
   if (!databaseUrl) return null;
   const sql = neon(databaseUrl);
-  return drizzleHttp(sql, { schema });
+  return drizzle(sql, { schema });
 }
 
-/**
- * Koneksi WebSocket Pool Neon untuk operasi yang membutuhkan transaksi (db.transaction)
- * Dibuat on-demand per request.
- */
-export function getTxDb(databaseUrl?: string) {
-  if (!databaseUrl) return null;
-  const pool = new Pool({ connectionString: databaseUrl });
-  return drizzleWs(pool, { schema });
-}
+export type DbClient = NonNullable<ReturnType<typeof getDb>>;

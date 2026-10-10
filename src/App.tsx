@@ -46,13 +46,16 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white">
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500 to-emerald-500 flex items-center justify-center text-white shadow-xl shadow-emerald-950/50 mb-4 animate-bounce">
-          <School className="w-8 h-8" />
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
+        <div className="relative flex items-center justify-center mb-5">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white shadow-lg shadow-emerald-950/60 border border-emerald-400/30">
+            <School className="w-7 h-7 text-white" />
+          </div>
+          <div className="absolute -inset-1.5 border-2 border-emerald-500/20 border-t-emerald-400 rounded-2xl animate-spin" />
         </div>
-        <p className="text-sm font-semibold tracking-wider text-emerald-200 uppercase">
-          Memuat SIAKAD Madrasah...
-        </p>
+        <div className="w-36 h-1.5 bg-emerald-950/80 rounded-full overflow-hidden border border-emerald-800/30">
+          <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full animate-pulse w-2/3" />
+        </div>
       </div>
     );
   }

@@ -12,7 +12,7 @@ if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function
   });
 }
 import { AppContext, Bindings } from './types.ts';
-import { store } from './store.ts';
+import { getStore } from './store.ts';
 
 export const TOKEN_COOKIE_NAME = 'siakad_token';
 
@@ -105,7 +105,18 @@ export const authMiddleware: MiddlewareHandler<AppContext> = async (c, next) => 
     );
   }
 
-  const user = store.getUserById(payload.userId);
+  const store = getStore(c.env?.DATABASE_URL);
+  if (!store) {
+    return c.json(
+      {
+        success: false,
+        message: 'Koneksi database Neon gagal (DATABASE_URL tidak ditemukan).',
+      },
+      500
+    );
+  }
+
+  const user = await store.getUserById(payload.userId);
   if (!user || !user.is_active) {
     return c.json(
       {

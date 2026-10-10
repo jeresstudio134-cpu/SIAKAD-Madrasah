@@ -26,6 +26,8 @@ import {
   HelpCircle,
 } from 'lucide-react';
 import { PPDBPendaftar, PPDBStatus, Kelas } from '../../types';
+import { PrintPaperBar } from '../../components/ui/PrintPaperBar';
+import { PaperSize, PaperOrientation, triggerPrint } from '../../lib/print-utils';
 
 export function PPDBAdminPage() {
   const { user } = useAuth();
@@ -36,6 +38,8 @@ export function PPDBAdminPage() {
   const [search, setSearch] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('semua');
   const [selectedJalur, setSelectedJalur] = useState<string>('semua');
+  const [paper, setPaper] = useState<PaperSize>('a4');
+  const [orientation, setOrientation] = useState<PaperOrientation>('landscape');
 
   // Modal State
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -191,7 +195,7 @@ export function PPDBAdminPage() {
   return (
     <div className="space-y-6">
       {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs print:hidden">
         <div>
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emerald-700">
             <Users2 className="w-4 h-4" />
@@ -218,7 +222,7 @@ export function PPDBAdminPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 print:hidden">
         <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Pendaftar</span>
           <div className="text-2xl font-black text-slate-800 mt-1">{statsData?.totalPendaftar || 0}</div>
@@ -257,7 +261,7 @@ export function PPDBAdminPage() {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3 text-xs print:hidden">
         <div className="flex-1 w-full relative">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
           <input
@@ -309,8 +313,42 @@ export function PPDBAdminPage() {
         </div>
       </div>
 
-      {/* Table Content */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+      {/* Print Paper Toolbar */}
+      <PrintPaperBar
+        paper={paper}
+        onPaperChange={setPaper}
+        orientation={orientation}
+        onOrientationChange={setOrientation}
+        allowedPapers={['a4', 'f4']}
+        disabled={!pendaftarData?.data || pendaftarData.data.length === 0}
+        printLabel="Cetak Rekapitulasi PPDB"
+        onPrint={() => triggerPrint({ paper, orientation })}
+      />
+
+      {/* Table Content & Printable Container */}
+      <div
+        className={`print-area ${
+          paper === 'f4'
+            ? orientation === 'landscape'
+              ? 'print-f4-landscape sheet-preview-f4-landscape'
+              : 'print-f4 sheet-preview-f4'
+            : orientation === 'landscape'
+            ? 'print-a4-landscape sheet-preview-a4-landscape'
+            : 'print-a4 sheet-preview-a4'
+        } bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden p-4 sm:p-6 print:border-none print:shadow-none print:p-0 text-slate-900`}
+      >
+        {/* Kop Surat Panitia PPDB (Print Only) */}
+        <div className="kop-surat border-b-2 border-slate-800 pb-3 mb-3 text-center print:block hidden">
+          <p className="text-[10px] font-bold tracking-widest text-slate-700 uppercase">
+            PANITIA PENERIMAAN PESERTA DIDIK BARU (PPDB) MADRASAH
+          </p>
+          <h1 className="text-base font-extrabold uppercase tracking-wider text-slate-900">
+            REKAPITULASI DATA PENDAFTARAN SANTRI BARU
+          </h1>
+          <p className="text-xs text-slate-600 mt-0.5">
+            Filter Status: {selectedStatus.toUpperCase()} • Jalur: {selectedJalur} • Dicetak pada {new Date().toLocaleDateString('id-ID', { dateStyle: 'long' })}
+          </p>
+        </div>
         {isLoading ? (
           <div className="p-6">
             <TableSkeleton rows={6} cols={6} />
@@ -326,32 +364,32 @@ export function PPDBAdminPage() {
               <table className="w-full text-xs text-left border-collapse">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 font-semibold bg-slate-50/70">
-                    <th className="py-3 px-4">No. Pendaftaran</th>
-                    <th className="py-3 px-4">Calon Santri</th>
-                    <th className="py-3 px-4">Jalur & Asal Sekolah</th>
-                    <th className="py-3 px-4">Kontak Wali</th>
-                    <th className="py-3 px-4 text-center">Status</th>
-                    <th className="py-3 px-4 text-center">Konversi Siswa</th>
-                    <th className="py-3 px-4 text-right">Aksi</th>
+                    <th className="py-2.5 px-3">No. Pendaftaran</th>
+                    <th className="py-2.5 px-3">Calon Santri</th>
+                    <th className="py-2.5 px-3">Jalur & Asal Sekolah</th>
+                    <th className="py-2.5 px-3">Kontak Wali</th>
+                    <th className="py-2.5 px-3 text-center">Status</th>
+                    <th className="py-2.5 px-3 text-center print:hidden">Konversi Siswa</th>
+                    <th className="py-2.5 px-3 text-right print:hidden">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {pendaftarData.data.map((p) => (
                     <tr key={p.id} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="py-3 px-4 font-mono font-bold text-slate-800">
+                      <td className="py-2 px-3 font-mono font-bold text-slate-800">
                         {p.nomor_pendaftaran}
                       </td>
 
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-3">
+                      <td className="py-2 px-3">
+                        <div className="flex items-center gap-2">
                           {p.berkas_foto_url ? (
                             <img
                               src={p.berkas_foto_url}
                               alt={p.nama_lengkap}
-                              className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0"
+                              className="w-7 h-7 rounded-full object-cover border border-slate-200 shrink-0 print:hidden"
                             />
                           ) : (
-                            <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-xs shrink-0">
+                            <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-xs shrink-0 print:hidden">
                               {p.nama_lengkap.charAt(0)}
                             </div>
                           )}
@@ -364,21 +402,21 @@ export function PPDBAdminPage() {
                         </div>
                       </td>
 
-                      <td className="py-3 px-4">
+                      <td className="py-2 px-3">
                         <span className="font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded text-[10px]">
                           {p.jalur_pendaftaran}
                         </span>
                         <p className="text-[11px] text-slate-600 mt-0.5">{p.sekolah_asal || '-'}</p>
                       </td>
 
-                      <td className="py-3 px-4">
+                      <td className="py-2 px-3">
                         <p className="font-medium text-slate-800">{p.nama_ayah || p.nama_ibu || '-'}</p>
                         <span className="text-[11px] text-slate-500 font-mono">{p.telepon_ortu || '-'}</span>
                       </td>
 
-                      <td className="py-3 px-4 text-center">{getStatusBadge(p.status)}</td>
+                      <td className="py-2 px-3 text-center">{getStatusBadge(p.status)}</td>
 
-                      <td className="py-3 px-4 text-center">
+                      <td className="py-2 px-3 text-center print:hidden">
                         {p.is_converted ? (
                           <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
                             <CheckCircle2 className="w-3 h-3" /> Aktif
@@ -395,7 +433,7 @@ export function PPDBAdminPage() {
                         )}
                       </td>
 
-                      <td className="py-3 px-4 text-right">
+                      <td className="py-2 px-3 text-right print:hidden">
                         <button
                           onClick={() => handleOpenDetail(p)}
                           className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer"
@@ -411,7 +449,7 @@ export function PPDBAdminPage() {
 
             {/* Pagination */}
             {Boolean(pendaftarData?.totalPages && pendaftarData.totalPages > 1) && (
-              <div className="p-4 border-t border-slate-100">
+              <div className="p-4 border-t border-slate-100 print:hidden">
                 <Pagination
                   currentPage={pendaftarData?.page || 1}
                   totalPages={pendaftarData?.totalPages || 1}
@@ -421,6 +459,28 @@ export function PPDBAdminPage() {
                 />
               </div>
             )}
+
+            {/* Lembar Tanda Tangan Cetak Rekap PPDB */}
+            <div className="signature-block print-avoid-break print:grid hidden grid-cols-2 gap-8 text-center text-xs mt-6 pt-3">
+              <div>
+                <p className="text-slate-500">Mengetahui,</p>
+                <p className="font-semibold text-slate-800">Kepala Madrasah</p>
+                <div className="h-14" />
+                <p className="font-bold text-slate-900 border-t border-slate-400 inline-block px-8">
+                  ( ..................................... )
+                </p>
+              </div>
+              <div>
+                <p className="text-slate-500">
+                  Dicetak tanggal {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                </p>
+                <p className="font-semibold text-slate-800">Ketua Panitia PPDB</p>
+                <div className="h-14" />
+                <p className="font-bold text-slate-900 border-t border-slate-400 inline-block px-8">
+                  ( ..................................... )
+                </p>
+              </div>
+            </div>
           </div>
         )}
       </div>

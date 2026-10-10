@@ -39,25 +39,29 @@ export function Modal({
   }[actualWidth];
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 print:static print:inset-auto print:overflow-visible print:p-0 print:m-0 print:bg-transparent print:backdrop-blur-none"
+    >
       <div
-        className="fixed inset-0"
+        className="fixed inset-0 print:hidden"
         onClick={onClose}
         aria-hidden="true"
       />
       <div
-        className={`relative bg-white rounded-2xl shadow-2xl border border-slate-100 w-full ${maxWidthClass} overflow-hidden z-10 transition-all transform animate-in fade-in zoom-in-95 duration-150`}
+        className={`relative bg-white rounded-2xl shadow-2xl border border-slate-100 w-full ${maxWidthClass} overflow-hidden z-10 transition-all transform animate-in fade-in zoom-in-95 duration-150 print:border-none print:shadow-none print:max-w-none print:w-full print:p-0 print:m-0 print:static print:rounded-none`}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/70">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/70 print:hidden">
           <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-200/60 transition-colors"
+            className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-200/60 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="p-6 max-h-[80vh] overflow-y-auto">{children}</div>
+        <div className="p-6 max-h-[80vh] overflow-y-auto print:max-h-none print:overflow-visible print:p-0 print:m-0">{children}</div>
       </div>
     </div>
   );

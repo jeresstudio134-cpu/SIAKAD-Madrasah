@@ -6,6 +6,8 @@ import { TransaksiPembayaran, JenisPembayaran, Kelas, TahunAjaran } from '../../
 import { TableSkeleton } from '../../components/ui/Skeleton';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { KwitansiModal } from '../../components/keuangan/KwitansiModal';
+import { PrintPaperBar } from '../../components/ui/PrintPaperBar';
+import { PaperSize, PaperOrientation, triggerPrint } from '../../lib/print-utils';
 import {
   FileSpreadsheet,
   Filter,
@@ -33,6 +35,9 @@ export function LaporanKeuanganPage() {
   const [selectedKelasId, setSelectedKelasId] = useState<string>('');
   const [search, setSearch] = useState<string>('');
   const [selectedTxId, setSelectedTxId] = useState<number | null>(null);
+
+  const [paper, setPaper] = useState<PaperSize>('a4');
+  const [orientation, setOrientation] = useState<PaperOrientation>('landscape');
 
   // Queries
   const { data: taList = [] } = useQuery({
@@ -133,18 +138,20 @@ export function LaporanKeuanganPage() {
           </p>
         </div>
 
-        <button
-          onClick={handleExportExcel}
-          disabled={transaksiList.length === 0}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-300 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-        >
-          <FileSpreadsheet className="w-4 h-4" />
-          Ekspor ke Excel (.xlsx)
-        </button>
+        <div className="flex items-center gap-2 print:hidden">
+          <button
+            onClick={() => handleExportExcel()}
+            disabled={transaksiList.length === 0}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-300 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            Ekspor ke Excel (.xlsx)
+          </button>
+        </div>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 print:hidden">
         <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
           <span className="text-[10px] uppercase font-bold text-slate-500 block">
             Total Kas Diterima (Valid)
@@ -184,7 +191,7 @@ export function LaporanKeuanganPage() {
       </div>
 
       {/* Filter Section */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-3">
+      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-3 print:hidden">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
           {/* Dari Tanggal */}
           <div>
@@ -282,8 +289,59 @@ export function LaporanKeuanganPage() {
         </div>
       </div>
 
-      {/* Tabel Data Laporan */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+      {/* Print Paper Toolbar */}
+      <PrintPaperBar
+        paper={paper}
+        onPaperChange={setPaper}
+        orientation={orientation}
+        onOrientationChange={setOrientation}
+        allowedPapers={['a4', 'f4']}
+        disabled={transaksiList.length === 0}
+        printLabel="Cetak Laporan Keuangan"
+        onPrint={() => triggerPrint({ paper, orientation })}
+      />
+
+      {/* Tabel Data Laporan & Printable Container */}
+      <div
+        className={`print-area ${
+          paper === 'f4'
+            ? orientation === 'landscape'
+              ? 'print-f4-landscape sheet-preview-f4-landscape'
+              : 'print-f4 sheet-preview-f4'
+            : orientation === 'landscape'
+            ? 'print-a4-landscape sheet-preview-a4-landscape'
+            : 'print-a4 sheet-preview-a4'
+        } bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden p-4 sm:p-6 print:border-none print:shadow-none print:p-0 text-slate-900`}
+      >
+        {/* Printable Sheet Header (Muncul Saat Cetak) */}
+        <div className="kop-surat border-b-2 border-slate-800 pb-3 mb-3 text-center print:block hidden">
+          <p className="text-[10px] font-bold tracking-widest text-slate-700 uppercase">
+            KEMENTERIAN AGAMA REPUBLIK INDONESIA
+          </p>
+          <h1 className="text-base font-extrabold uppercase tracking-wider text-slate-900">
+            REKAPITULASI LAPORAN KAS & TRANSAKSI KEUANGAN MADRASAH
+          </h1>
+          <p className="text-xs text-slate-600 mt-0.5">
+            Periode: {startDate} s.d. {endDate} • Dicetak pada {new Date().toLocaleDateString('id-ID', { dateStyle: 'long' })}
+          </p>
+        </div>
+
+        {/* Print Summary Strip (Muncul Saat Cetak) */}
+        <div className="print:grid hidden grid-cols-3 gap-3 p-2.5 bg-slate-50 border border-slate-300 rounded-lg mb-3 text-xs">
+          <div>
+            <span className="text-slate-500 block text-[9px] uppercase font-bold">Total Kas Diterima (Valid):</span>
+            <span className="font-mono font-bold text-emerald-800">Rp {Number(summary.totalNominalValid).toLocaleString('id-ID')}</span>
+          </div>
+          <div>
+            <span className="text-slate-500 block text-[9px] uppercase font-bold">Total Transaksi Void:</span>
+            <span className="font-mono font-bold text-rose-800">Rp {Number(summary.totalNominalBatal).toLocaleString('id-ID')}</span>
+          </div>
+          <div>
+            <span className="text-slate-500 block text-[9px] uppercase font-bold">Jumlah Transaksi:</span>
+            <span className="font-bold text-slate-800">{transaksiList.length} Transaksi Terdata</span>
+          </div>
+        </div>
+
         {isLoading ? (
           <div className="p-6">
             <TableSkeleton rows={8} cols={8} />
@@ -294,34 +352,34 @@ export function LaporanKeuanganPage() {
             description="Tidak ditemukan riwayat pembayaran pada rentang tanggal dan kriteria filter ini."
           />
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto print:overflow-visible">
             <table className="w-full text-xs text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 text-slate-500 font-semibold bg-slate-50/70">
-                  <th className="py-3 px-3">No. Kwitansi</th>
-                  <th className="py-3 px-3">Tanggal</th>
-                  <th className="py-3 px-3">Nama Siswa</th>
-                  <th className="py-3 px-3">Pos Pembayaran</th>
-                  <th className="py-3 px-3">Bulan</th>
-                  <th className="py-3 px-3 font-mono">Jumlah Bayar</th>
-                  <th className="py-3 px-3 text-center">Metode</th>
-                  <th className="py-3 px-3">Kasir / Penerima</th>
-                  <th className="py-3 px-3 text-center">Status</th>
-                  <th className="py-3 px-3 text-right">Aksi</th>
+                  <th className="py-2.5 px-2.5">No. Kwitansi</th>
+                  <th className="py-2.5 px-2.5">Tanggal</th>
+                  <th className="py-2.5 px-2.5">Nama Siswa</th>
+                  <th className="py-2.5 px-2.5">Pos Pembayaran</th>
+                  <th className="py-2.5 px-2.5">Bulan</th>
+                  <th className="py-2.5 px-2.5 font-mono">Jumlah Bayar</th>
+                  <th className="py-2.5 px-2.5 text-center">Metode</th>
+                  <th className="py-2.5 px-2.5">Kasir / Penerima</th>
+                  <th className="py-2.5 px-2.5 text-center">Status</th>
+                  <th className="py-2.5 px-2.5 text-right print:hidden">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {transaksiList.map((tx) => (
                   <tr key={tx.id} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="py-2.5 px-3 font-mono font-bold text-slate-800">
+                    <td className="py-2 px-2.5 font-mono font-bold text-slate-800">
                       {tx.nomor_transaksi}
                     </td>
 
-                    <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap">
+                    <td className="py-2 px-2.5 text-slate-600 whitespace-nowrap">
                       {tx.tanggal_bayar}
                     </td>
 
-                    <td className="py-2.5 px-3">
+                    <td className="py-2 px-2.5">
                       <div>
                         <p className="font-bold text-slate-900">{tx.siswa?.nama}</p>
                         <span className="text-[10px] text-slate-400 font-mono">
@@ -330,29 +388,29 @@ export function LaporanKeuanganPage() {
                       </div>
                     </td>
 
-                    <td className="py-2.5 px-3 font-medium text-slate-800">
+                    <td className="py-2 px-2.5 font-medium text-slate-800">
                       {tx.tagihan?.jenisPembayaran?.nama || 'Pos Pembayaran'}
                     </td>
 
-                    <td className="py-2.5 px-3 text-slate-600">
+                    <td className="py-2 px-2.5 text-slate-600">
                       {tx.tagihan?.bulan || '-'}
                     </td>
 
-                    <td className="py-2.5 px-3 font-mono font-bold text-emerald-700">
+                    <td className="py-2 px-2.5 font-mono font-bold text-emerald-700">
                       Rp {Number(tx.jumlah_bayar).toLocaleString('id-ID')}
                     </td>
 
-                    <td className="py-2.5 px-3 text-center">
+                    <td className="py-2 px-2.5 text-center">
                       <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700">
                         {tx.metode}
                       </span>
                     </td>
 
-                    <td className="py-2.5 px-3 text-slate-600">
+                    <td className="py-2 px-2.5 text-slate-600">
                       {tx.createdByUser?.nama_lengkap || 'Kasir'}
                     </td>
 
-                    <td className="py-2.5 px-3 text-center">
+                    <td className="py-2 px-2.5 text-center">
                       {tx.status === 'valid' ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
                           <CheckCircle2 className="w-3 h-3" /> Sah
@@ -367,7 +425,7 @@ export function LaporanKeuanganPage() {
                       )}
                     </td>
 
-                    <td className="py-2.5 px-3 text-right">
+                    <td className="py-2 px-2.5 text-right print:hidden">
                       <button
                         onClick={() => setSelectedTxId(tx.id)}
                         className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold rounded-lg text-[11px] transition-colors cursor-pointer"
@@ -383,6 +441,28 @@ export function LaporanKeuanganPage() {
             </table>
           </div>
         )}
+
+        {/* Lembar Tanda Tangan Laporan (Muncul Saat Cetak) */}
+        <div className="signature-block print-avoid-break print:grid hidden grid-cols-2 gap-8 text-center text-xs mt-6 pt-3">
+          <div>
+            <p className="text-slate-500">Mengetahui,</p>
+            <p className="font-semibold text-slate-800">Kepala Madrasah</p>
+            <div className="h-14" />
+            <p className="font-bold text-slate-900 border-t border-slate-400 inline-block px-8">
+              ( ..................................... )
+            </p>
+          </div>
+          <div>
+            <p className="text-slate-500">
+              Dicetak tanggal {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+            </p>
+            <p className="font-semibold text-slate-800">Bendahara / Petugas Kasir</p>
+            <div className="h-14" />
+            <p className="font-bold text-slate-900 border-t border-slate-400 inline-block px-8">
+              ( ..................................... )
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Kwitansi Modal */}

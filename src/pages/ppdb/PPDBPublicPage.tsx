@@ -21,6 +21,8 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { PPDBPendaftar } from '../../types';
+import { PrintPaperBar } from '../../components/ui/PrintPaperBar';
+import { PaperSize, triggerPrint } from '../../lib/print-utils';
 
 export function PPDBPublicPage() {
   const { success, error: toastError } = useToast();
@@ -29,6 +31,7 @@ export function PPDBPublicPage() {
   const [searchedData, setSearchedData] = useState<PPDBPendaftar | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [paper, setPaper] = useState<PaperSize>('a4');
 
   // Form State
   const [form, setForm] = useState({
@@ -214,7 +217,7 @@ export function PPDBPublicPage() {
       </header>
 
       {/* Hero Section */}
-      <div className="bg-gradient-to-r from-emerald-900 via-emerald-800 to-teal-900 text-white py-12 px-4 shadow-inner">
+      <div className="bg-gradient-to-r from-emerald-900 via-emerald-800 to-teal-900 text-white py-12 px-4 shadow-inner print:hidden">
         <div className="max-w-4xl mx-auto text-center space-y-3">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-800/80 border border-emerald-600/40 text-amber-300 text-xs font-semibold">
             <Sparkles className="w-3.5 h-3.5" />
@@ -267,85 +270,138 @@ export function PPDBPublicPage() {
           <div>
             {registeredResult ? (
               /* Kartu Bukti Pendaftaran Setelah Berhasil */
-              <div className="print-area print-a4 bg-white rounded-3xl p-6 sm:p-8 border border-emerald-200 shadow-xl space-y-6">
-                <div className="flex flex-col items-center text-center space-y-2 border-b border-slate-100 pb-6">
-                  <div className="w-16 h-16 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                    <CheckCircle2 className="w-10 h-10" />
-                  </div>
-                  <h3 className="text-xl sm:text-2xl font-black text-slate-800">
-                    Pendaftaran Berhasil Dikirim!
-                  </h3>
-                  <p className="text-sm text-slate-500 max-w-md">
-                    Simpan nomor pendaftaran di bawah ini untuk memeriksa status verifikasi berkas dan pengumuman seleksi.
-                  </p>
-                  <div className="mt-3 px-6 py-3 rounded-2xl bg-emerald-50 border-2 border-dashed border-emerald-500 text-emerald-900 font-mono text-xl sm:text-2xl font-black tracking-wider">
-                    {registeredResult.nomor_pendaftaran}
-                  </div>
-                </div>
+              <div className="space-y-4">
+                {/* Print Paper Toolbar */}
+                <PrintPaperBar
+                  paper={paper}
+                  onPaperChange={setPaper}
+                  allowedPapers={['a4', 'f4']}
+                  printLabel="Cetak Bukti Pendaftaran"
+                  onPrint={() => triggerPrint({ paper, orientation: 'portrait' })}
+                />
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs bg-slate-50 p-4 rounded-2xl border border-slate-200/60">
-                  <div>
-                    <span className="text-slate-400">Nama Lengkap:</span>
-                    <p className="font-bold text-slate-800">{registeredResult.nama_lengkap}</p>
-                  </div>
-                  <div>
-                    <span className="text-slate-400">Jalur Pendaftaran:</span>
-                    <p className="font-bold text-slate-800">{registeredResult.jalur_pendaftaran}</p>
-                  </div>
-                  <div>
-                    <span className="text-slate-400">Asal Sekolah:</span>
-                    <p className="font-bold text-slate-800">{registeredResult.sekolah_asal || '-'}</p>
-                  </div>
-                  <div>
-                    <span className="text-slate-400">No. WhatsApp Wali:</span>
-                    <p className="font-bold text-slate-800">{registeredResult.telepon_ortu || '-'}</p>
-                  </div>
-                  <div>
-                    <span className="text-slate-400">Status Awal:</span>
-                    <div className="mt-1">{getStatusBadge(registeredResult.status)}</div>
-                  </div>
-                  <div>
-                    <span className="text-slate-400">Waktu Pendaftaran:</span>
-                    <p className="font-medium text-slate-700">
-                      {new Date().toLocaleDateString('id-ID', { dateStyle: 'long' })}
+                {/* Kartu Bukti Pendaftaran Resmi */}
+                <div
+                  className={`print-area ${
+                    paper === 'f4' ? 'print-f4 sheet-preview-f4' : 'print-a4 sheet-preview-a4'
+                  } bg-white rounded-3xl p-6 sm:p-8 border border-emerald-200 shadow-xl space-y-5 print:border-none print:shadow-none print:p-0 print:m-0 print:space-y-4 print:rounded-none`}
+                >
+                  {/* Kop Surat Madrasah Khusus Dokumen Cetak */}
+                  <div className="kop-surat border-b-2 border-slate-800 pb-3 mb-2 print:block hidden text-center">
+                    <p className="text-[10px] font-bold tracking-widest text-slate-700 uppercase">
+                      PANITIA PENERIMAAN PESERTA DIDIK BARU (PPDB)
+                    </p>
+                    <h2 className="text-base font-extrabold uppercase tracking-tight text-slate-900">
+                      {infoData?.madrasah?.nama || 'MADRASAH TSANAWIYAH'}
+                    </h2>
+                    <p className="text-[10px] text-slate-600">
+                      Tahun Ajaran {infoData?.tahunAjaran?.tahun || '2024/2025'} • NPSN: {infoData?.madrasah?.npsn || '-'}
                     </p>
                   </div>
-                </div>
 
-                <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-                  <button
-                    onClick={() => window.print()}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
-                  >
-                    <Printer className="w-4 h-4" /> Cetak Bukti Pendaftaran
-                  </button>
-                  <button
-                    onClick={() => {
-                      setRegisteredResult(null);
-                      setForm({
-                        nama_lengkap: '',
-                        nisn: '',
-                        nik: '',
-                        jenis_kelamin: 'L',
-                        tempat_lahir: '',
-                        tanggal_lahir: '',
-                        sekolah_asal: '',
-                        nama_ayah: '',
-                        nama_ibu: '',
-                        telepon_ortu: '',
-                        email_ortu: '',
-                        alamat: '',
-                        jalur_pendaftaran: 'Reguler',
-                        berkas_foto_url: '',
-                        berkas_ijazah_url: '',
-                        berkas_akta_url: '',
-                        berkas_kk_url: '',
-                      });
-                    }}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
-                  >
-                    Daftar Santri Lain
-                  </button>
+                  <div className="flex flex-col items-center text-center space-y-2 border-b border-slate-100 pb-5">
+                    <div className="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center print:hidden">
+                      <CheckCircle2 className="w-9 h-9" />
+                    </div>
+                    <h3 className="text-lg sm:text-2xl font-black text-slate-800 uppercase tracking-tight">
+                      KARTU BUKTI PENDAFTARAN SANTRI BARU
+                    </h3>
+                    <p className="text-xs text-slate-500 max-w-md">
+                      Simpan kartu dan nomor pendaftaran ini sebagai bukti sah untuk verifikasi berkas fisik dan pengumuman seleksi.
+                    </p>
+                    <div className="mt-2 px-6 py-2.5 rounded-2xl bg-emerald-50 border-2 border-dashed border-emerald-500 text-emerald-900 font-mono text-xl sm:text-2xl font-black tracking-wider">
+                      {registeredResult.nomor_pendaftaran}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-slate-50 p-4 rounded-2xl border border-slate-200/60">
+                    <div>
+                      <span className="text-slate-400">Nama Lengkap:</span>
+                      <p className="font-bold text-slate-800">{registeredResult.nama_lengkap}</p>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Jalur Pendaftaran:</span>
+                      <p className="font-bold text-slate-800">{registeredResult.jalur_pendaftaran}</p>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Asal Sekolah:</span>
+                      <p className="font-bold text-slate-800">{registeredResult.sekolah_asal || '-'}</p>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">No. WhatsApp Wali:</span>
+                      <p className="font-bold text-slate-800">{registeredResult.telepon_ortu || '-'}</p>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Status Pendaftaran:</span>
+                      <div className="mt-1">{getStatusBadge(registeredResult.status)}</div>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Tanggal Pendaftaran:</span>
+                      <p className="font-medium text-slate-700">
+                        {new Date().toLocaleDateString('id-ID', { dateStyle: 'long' })}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Instruksi Tahap Selanjutnya (Cetak) */}
+                  <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-xl text-[11px] text-emerald-900 leading-relaxed">
+                    <span className="font-bold block mb-0.5">Petunjuk Seleksi & Verifikasi Dokumen:</span>
+                    Bawa kartu pendaftaran ini bersama fotokopi Akta Kelahiran, Kartu Keluarga, dan Rapor terakhir ke Sekretariat Panitia PPDB madrasah pada jam kerja.
+                  </div>
+
+                  {/* Lembar Tanda Tangan Cetak */}
+                  <div className="signature-block print-avoid-break print:grid hidden grid-cols-2 gap-8 text-center text-xs pt-4">
+                    <div>
+                      <p className="text-slate-500">Calon Santri / Orang Tua</p>
+                      <div className="h-14" />
+                      <p className="font-bold text-slate-900 border-t border-slate-400 inline-block px-6">
+                        ( {registeredResult.nama_lengkap} )
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-slate-500">Panitia PPDB Madrasah</p>
+                      <div className="h-14" />
+                      <p className="font-bold text-slate-900 border-t border-slate-400 inline-block px-6">
+                        ( ..................................... )
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-center gap-3 pt-2 print:hidden">
+                    <button
+                      onClick={() => triggerPrint({ paper, orientation: 'portrait' })}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
+                    >
+                      <Printer className="w-4 h-4" /> Cetak Bukti Pendaftaran
+                    </button>
+                    <button
+                      onClick={() => {
+                        setRegisteredResult(null);
+                        setForm({
+                          nama_lengkap: '',
+                          nisn: '',
+                          nik: '',
+                          jenis_kelamin: 'L',
+                          tempat_lahir: '',
+                          tanggal_lahir: '',
+                          sekolah_asal: '',
+                          nama_ayah: '',
+                          nama_ibu: '',
+                          telepon_ortu: '',
+                          email_ortu: '',
+                          alamat: '',
+                          jalur_pendaftaran: 'Reguler',
+                          berkas_foto_url: '',
+                          berkas_ijazah_url: '',
+                          berkas_akta_url: '',
+                          berkas_kk_url: '',
+                        });
+                      }}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                    >
+                      Daftar Lagi
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -717,80 +773,140 @@ export function PPDBPublicPage() {
 
             {/* Hasil Pencarian */}
             {searchedData && (
-              <div className="print-area print-a4 bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-lg space-y-6 animate-in fade-in duration-200">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
-                  <div>
-                    <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg">
-                      {searchedData.nomor_pendaftaran}
-                    </span>
-                    <h4 className="text-xl font-black text-slate-900 mt-2">
-                      {searchedData.nama_lengkap}
-                    </h4>
-                    <p className="text-xs text-slate-500">
-                      Asal: {searchedData.sekolah_asal || '-'} • Jalur: {searchedData.jalur_pendaftaran}
-                    </p>
-                  </div>
-                  <div>{getStatusBadge(searchedData.status)}</div>
-                </div>
+              <div className="space-y-4">
+                {/* Print Paper Toolbar */}
+                <PrintPaperBar
+                  paper={paper}
+                  onPaperChange={setPaper}
+                  allowedPapers={['a4', 'f4']}
+                  printLabel="Cetak Surat Keterangan Status"
+                  onPrint={() => triggerPrint({ paper, orientation: 'portrait' })}
+                />
 
-                {/* Catatan Verifikasi Dari Panitia */}
-                {searchedData.catatan_verifikasi && (
-                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-1">
-                    <span className="font-bold text-slate-900 flex items-center gap-1.5">
-                      <FileText className="w-4 h-4 text-emerald-600" />
-                      Catatan Panitia PPDB:
-                    </span>
-                    <p className="italic text-slate-600 leading-relaxed">
-                      "{searchedData.catatan_verifikasi}"
+                <div
+                  className={`print-area ${
+                    paper === 'f4' ? 'print-f4 sheet-preview-f4' : 'print-a4 sheet-preview-a4'
+                  } bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-lg space-y-5 animate-in fade-in duration-200 print:border-none print:shadow-none print:p-0 print:m-0 print:space-y-4 print:rounded-none`}
+                >
+                  {/* Kop Surat Resmi Madrasah Khusus Print */}
+                  <div className="kop-surat border-b-2 border-slate-800 pb-3 mb-2 print:block hidden text-center">
+                    <p className="text-[10px] font-bold tracking-widest text-slate-700 uppercase">
+                      PANITIA PENERIMAAN PESERTA DIDIK BARU (PPDB)
+                    </p>
+                    <h2 className="text-base font-extrabold uppercase tracking-tight text-slate-900">
+                      {infoData?.madrasah?.nama || 'MADRASAH TSANAWIYAH'}
+                    </h2>
+                    <p className="text-[10px] text-slate-600">
+                      Tahun Ajaran {infoData?.tahunAjaran?.tahun || '2024/2025'} • NPSN: {infoData?.madrasah?.npsn || '-'}
                     </p>
                   </div>
-                )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs bg-slate-50/50 p-4 rounded-2xl border border-slate-200/50">
-                  <div>
-                    <span className="text-slate-400">NISN:</span>
-                    <p className="font-semibold text-slate-800">{searchedData.nisn || '-'}</p>
-                  </div>
-                  <div>
-                    <span className="text-slate-400">Jenis Kelamin:</span>
-                    <p className="font-semibold text-slate-800">
-                      {searchedData.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan'}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-slate-400">Tempat, Tgl Lahir:</span>
-                    <p className="font-semibold text-slate-800">
-                      {searchedData.tempat_lahir || '-'}, {searchedData.tanggal_lahir || '-'}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-slate-400">Nama Orang Tua:</span>
-                    <p className="font-semibold text-slate-800">
-                      {searchedData.nama_ayah || searchedData.nama_ibu || '-'}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Informasi Kelulusan & Daftar Ulang */}
-                {searchedData.status === 'diterima' && (
-                  <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-900 space-y-2">
-                    <div className="font-black text-sm flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-amber-600" />
-                      Selamat! Anda Dinyatakan Lulus Seleksi
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                    <div>
+                      <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg">
+                        {searchedData.nomor_pendaftaran}
+                      </span>
+                      <h4 className="text-lg sm:text-xl font-black text-slate-900 mt-2">
+                        SURAT KETERANGAN STATUS PENDAFTARAN PPDB
+                      </h4>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Nama: {searchedData.nama_lengkap} • Jalur: {searchedData.jalur_pendaftaran}
+                      </p>
                     </div>
-                    <p className="text-xs text-emerald-800 leading-relaxed">
-                      Silakan datang ke sekretariat madrasah untuk verifikasi dokumen fisik asli dan proses administrasi daftar ulang santri baru.
-                    </p>
+                    <div>{getStatusBadge(searchedData.status)}</div>
                   </div>
-                )}
 
-                <div className="flex justify-end pt-2">
-                  <button
-                    onClick={() => window.print()}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
-                  >
-                    <Printer className="w-4 h-4" /> Cetak Lembar Status
-                  </button>
+                  {/* Catatan Verifikasi Dari Panitia */}
+                  {searchedData.catatan_verifikasi && (
+                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-1">
+                      <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                        <FileText className="w-4 h-4 text-emerald-600" />
+                        Catatan Panitia PPDB:
+                      </span>
+                      <p className="italic text-slate-600 leading-relaxed">
+                        "{searchedData.catatan_verifikasi}"
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs bg-slate-50/70 p-4 rounded-2xl border border-slate-200/50">
+                    <div>
+                      <span className="text-slate-400">NISN:</span>
+                      <p className="font-semibold text-slate-800">{searchedData.nisn || '-'}</p>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Jenis Kelamin:</span>
+                      <p className="font-semibold text-slate-800">
+                        {searchedData.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan'}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Tempat, Tgl Lahir:</span>
+                      <p className="font-semibold text-slate-800">
+                        {searchedData.tempat_lahir || '-'}, {searchedData.tanggal_lahir || '-'}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Nama Orang Tua:</span>
+                      <p className="font-semibold text-slate-800">
+                        {searchedData.nama_ayah || searchedData.nama_ibu || '-'}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Sekolah Asal:</span>
+                      <p className="font-semibold text-slate-800">{searchedData.sekolah_asal || '-'}</p>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">No. Kontak:</span>
+                      <p className="font-semibold text-slate-800">{searchedData.telepon_ortu || '-'}</p>
+                    </div>
+                  </div>
+
+                  {/* Informasi Kelulusan & Daftar Ulang */}
+                  {searchedData.status === 'diterima' && (
+                    <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-900 space-y-1.5">
+                      <div className="font-black text-xs sm:text-sm flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-amber-600" />
+                        Selamat! Calon Santri Dinyatakan Lulus Seleksi Masuk
+                      </div>
+                      <p className="text-xs text-emerald-800 leading-relaxed">
+                        Silakan datang ke sekretariat madrasah dengan membawa surat ini dan dokumen fisik asli untuk administrasi daftar ulang santri baru.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Lembar Pengesahan Cetak */}
+                  <div className="signature-block print-avoid-break print:grid hidden grid-cols-2 gap-8 text-center text-xs pt-4">
+                    <div>
+                      <p className="text-slate-500">
+                        Diterbitkan di {infoData?.madrasah?.alamat?.split(',')[0] || 'Madrasah'}
+                      </p>
+                      <p className="font-semibold text-slate-800">Orang Tua / Wali Santri</p>
+                      <div className="h-14" />
+                      <p className="font-bold text-slate-900 border-t border-slate-400 inline-block px-6">
+                        ( ..................................... )
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-slate-500">
+                        Tanggal: {new Date().toLocaleDateString('id-ID', { dateStyle: 'long' })}
+                      </p>
+                      <p className="font-semibold text-slate-800">Ketua Panitia PPDB</p>
+                      <div className="h-14" />
+                      <p className="font-bold text-slate-900 border-t border-slate-400 inline-block px-6">
+                        ( ..................................... )
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-2 print:hidden">
+                    <button
+                      onClick={() => triggerPrint({ paper, orientation: 'portrait' })}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+                    >
+                      <Printer className="w-4 h-4" /> Cetak Lembar Status (PDF)
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

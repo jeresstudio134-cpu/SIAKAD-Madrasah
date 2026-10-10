@@ -8,6 +8,8 @@ import { TableSkeleton } from '../../components/ui/Skeleton';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Modal } from '../../components/ui/Modal';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
+import { PrintPaperBar } from '../../components/ui/PrintPaperBar';
+import { PaperSize, PaperOrientation, triggerPrint } from '../../lib/print-utils';
 import {
   CalendarDays,
   Plus,
@@ -20,6 +22,7 @@ import {
   BookOpen,
   Sparkles,
   AlertCircle,
+  Printer,
 } from 'lucide-react';
 
 const HARI_LIST = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'] as const;
@@ -36,6 +39,9 @@ export function JadwalPelajaranPage() {
   const { hasPermission } = useAuth();
   const { success, error, warning } = useToast();
   const queryClient = useQueryClient();
+
+  const [paper, setPaper] = useState<PaperSize>('a4');
+  const [orientation, setOrientation] = useState<PaperOrientation>('landscape');
 
   const canEdit = hasPermission('akademik', 'ubah') || hasPermission('akademik', 'tambah');
 
@@ -272,9 +278,44 @@ export function JadwalPelajaranPage() {
         </div>
       </div>
 
-      {/* Timetable Weekly Matrix Grid */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+      {/* Print Paper Toolbar */}
+      <PrintPaperBar
+        paper={paper}
+        onPaperChange={setPaper}
+        orientation={orientation}
+        onOrientationChange={setOrientation}
+        allowedPapers={['a4', 'f4']}
+        disabled={jadwalList.length === 0}
+        printLabel="Cetak Jadwal Pelajaran"
+        onPrint={() => triggerPrint({ paper, orientation })}
+      />
+
+      {/* Timetable Weekly Matrix Grid & Printable Container */}
+      <div
+        className={`print-area ${
+          paper === 'f4'
+            ? orientation === 'landscape'
+              ? 'print-f4-landscape sheet-preview-f4-landscape'
+              : 'print-f4 sheet-preview-f4'
+            : orientation === 'landscape'
+            ? 'print-a4-landscape sheet-preview-a4-landscape'
+            : 'print-a4 sheet-preview-a4'
+        } bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden p-4 sm:p-6 print:border-none print:shadow-none print:p-0 text-slate-900`}
+      >
+        {/* Kop Surat Jadwal (Print Only) */}
+        <div className="kop-surat border-b-2 border-slate-800 pb-3 mb-3 text-center print:block hidden">
+          <p className="text-[10px] font-bold tracking-widest text-slate-700 uppercase">
+            KEMENTERIAN AGAMA REPUBLIK INDONESIA
+          </p>
+          <h1 className="text-base font-extrabold uppercase tracking-wider text-slate-900">
+            JADWAL KEGIATAN BELAJAR MENGAJAR (KBM) MINGGUAN
+          </h1>
+          <p className="text-xs text-slate-600 mt-0.5">
+            Kelas: {kelasList.find((k) => String(k?.id) === selectedKelasId)?.nama || 'Semua'} • Tahun Ajaran {activeTa?.tahun || '-'} ({activeTa?.semester || '-'}) • Dicetak pada {new Date().toLocaleDateString('id-ID', { dateStyle: 'long' })}
+          </p>
+        </div>
+
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 print:hidden">
           <div className="font-bold text-xs text-slate-800 flex items-center gap-2">
             <CalendarDays className="w-4 h-4 text-emerald-600" />
             <span>
@@ -290,13 +331,13 @@ export function JadwalPelajaranPage() {
             <TableSkeleton rows={6} cols={7} />
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto print:overflow-visible">
             <table className="w-full border-collapse text-xs">
               <thead>
                 <tr className="bg-slate-100/70 border-b border-slate-200 text-slate-700 text-center font-bold">
-                  <th className="py-3 px-3 w-28 border-r border-slate-200">Jam / Waktu</th>
+                  <th className="py-2.5 px-2.5 w-24 border-r border-slate-300">Jam / Waktu</th>
                   {HARI_LIST.map((hari) => (
-                    <th key={hari} className="py-3 px-3 min-w-[160px] border-r border-slate-200">
+                    <th key={hari} className="py-2.5 px-2.5 min-w-[140px] border-r border-slate-300">
                       {hari}
                     </th>
                   ))}
@@ -306,7 +347,7 @@ export function JadwalPelajaranPage() {
                 {JAM_LIST.map((jam) => (
                   <tr key={jam.jam_ke} className="hover:bg-slate-50/50 transition-colors">
                     {/* Waktu Kolom */}
-                    <td className="py-3 px-2 border-r border-slate-200 bg-slate-50 text-center">
+                    <td className="py-2.5 px-2 border-r border-slate-300 bg-slate-50 text-center">
                       <div className="font-extrabold text-slate-800">Ke-{jam.jam_ke}</div>
                       <div className="text-[10px] text-slate-500 mt-0.5">{jam.waktu}</div>
                     </td>
@@ -320,10 +361,10 @@ export function JadwalPelajaranPage() {
                       return (
                         <td
                           key={hari}
-                          className="py-2 px-2 border-r border-slate-200 align-top relative group"
+                          className="py-2 px-2 border-r border-slate-300 align-top relative group"
                         >
                           {matchJadwal ? (
-                            <div className="p-2.5 rounded-xl border border-emerald-200 bg-emerald-50/70 shadow-2xs hover:shadow-sm transition-all text-left">
+                            <div className="p-2 rounded-xl border border-emerald-200 bg-emerald-50/70 shadow-2xs hover:shadow-sm transition-all text-left">
                               <div className="flex items-start justify-between gap-1">
                                 <span className="font-bold text-slate-900 text-xs line-clamp-1">
                                   {matchJadwal?.mapel?.nama || '-'}
@@ -331,7 +372,7 @@ export function JadwalPelajaranPage() {
                                 {canEdit && (
                                   <button
                                     onClick={() => setDeleteId(matchJadwal.id)}
-                                    className="text-slate-400 hover:text-rose-600 transition-colors p-0.5 cursor-pointer opacity-0 group-hover:opacity-100"
+                                    className="text-slate-400 hover:text-rose-600 transition-colors p-0.5 cursor-pointer opacity-0 group-hover:opacity-100 print:hidden"
                                     title="Hapus"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
@@ -348,11 +389,11 @@ export function JadwalPelajaranPage() {
                               </div>
                             </div>
                           ) : (
-                            <div className="h-full min-h-[58px] flex items-center justify-center">
+                            <div className="h-full min-h-[50px] flex items-center justify-center">
                               {canEdit ? (
                                 <button
                                   onClick={() => handleOpenAddModal(hari, jam.jam_ke)}
-                                  className="w-full h-full p-2 text-slate-300 hover:text-emerald-700 hover:bg-emerald-50/50 rounded-lg border border-dashed border-transparent hover:border-emerald-300 transition-all flex items-center justify-center cursor-pointer text-[10px] font-medium opacity-0 group-hover:opacity-100"
+                                  className="w-full h-full p-2 text-slate-300 hover:text-emerald-700 hover:bg-emerald-50/50 rounded-lg border border-dashed border-transparent hover:border-emerald-300 transition-all flex items-center justify-center cursor-pointer text-[10px] font-medium opacity-0 group-hover:opacity-100 print:hidden"
                                 >
                                   + Isi
                                 </button>
@@ -370,6 +411,28 @@ export function JadwalPelajaranPage() {
             </table>
           </div>
         )}
+
+        {/* Lembar Tanda Tangan Jadwal Cetak */}
+        <div className="signature-block print-avoid-break print:grid hidden grid-cols-2 gap-8 text-center text-xs mt-6 pt-3">
+          <div>
+            <p className="text-slate-500">Mengetahui,</p>
+            <p className="font-semibold text-slate-800">Kepala Madrasah</p>
+            <div className="h-14" />
+            <p className="font-bold text-slate-900 border-t border-slate-400 inline-block px-8">
+              ( ..................................... )
+            </p>
+          </div>
+          <div>
+            <p className="text-slate-500">
+              Dicetak tanggal {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+            </p>
+            <p className="font-semibold text-slate-800">Waka Bidang Kurikulum</p>
+            <div className="h-14" />
+            <p className="font-bold text-slate-900 border-t border-slate-400 inline-block px-8">
+              ( ..................................... )
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Modal Input Jadwal */}

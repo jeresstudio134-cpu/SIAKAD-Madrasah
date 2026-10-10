@@ -6,6 +6,8 @@ import { api } from '../../lib/api';
 import { Kelas, TahunAjaran, RekapAbsensiSiswa } from '../../types';
 import { TableSkeleton } from '../../components/ui/Skeleton';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { PrintPaperBar } from '../../components/ui/PrintPaperBar';
+import { PaperSize, PaperOrientation, triggerPrint } from '../../lib/print-utils';
 import {
   CalendarCheck,
   Save,
@@ -15,12 +17,16 @@ import {
   Calendar,
   AlertCircle,
   Users,
+  Printer,
 } from 'lucide-react';
 
 export function AbsensiPage() {
   const { hasPermission } = useAuth();
   const { success, error, warning } = useToast();
   const queryClient = useQueryClient();
+
+  const [paper, setPaper] = useState<PaperSize>('a4');
+  const [orientation, setOrientation] = useState<PaperOrientation>('portrait');
 
   const canEdit = hasPermission('akademik', 'ubah') || hasPermission('akademik', 'tambah');
 
@@ -364,9 +370,43 @@ export function AbsensiPage() {
         )}
       </div>
 
+      {/* Print Paper Toolbar */}
+      <PrintPaperBar
+        paper={paper}
+        onPaperChange={setPaper}
+        orientation={orientation}
+        onOrientationChange={setOrientation}
+        allowedPapers={['a4', 'f4']}
+        disabled={activeTab === 'harian' ? harianList.length === 0 : rekapList.length === 0}
+        printLabel={activeTab === 'harian' ? 'Cetak Absensi Harian' : 'Cetak Rekap Presensi'}
+        onPrint={() => triggerPrint({ paper, orientation })}
+      />
+
       {/* TAB 1: INPUT HARIAN */}
       {activeTab === 'harian' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div
+          className={`print-area ${
+            paper === 'f4'
+              ? orientation === 'landscape'
+                ? 'print-f4-landscape sheet-preview-f4-landscape'
+                : 'print-f4 sheet-preview-f4'
+              : orientation === 'landscape'
+              ? 'print-a4-landscape sheet-preview-a4-landscape'
+              : 'print-a4 sheet-preview-a4'
+          } bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden p-4 sm:p-6 print:border-none print:shadow-none print:p-0 text-slate-900`}
+        >
+          {/* Kop Surat Absensi Harian (Print Only) */}
+          <div className="kop-surat border-b-2 border-slate-800 pb-3 mb-3 text-center print:block hidden">
+            <p className="text-[10px] font-bold tracking-widest text-slate-700 uppercase">
+              KEMENTERIAN AGAMA REPUBLIK INDONESIA
+            </p>
+            <h1 className="text-base font-extrabold uppercase tracking-wider text-slate-900">
+              DAFTAR HADIR / PRESENSI SISWA HARIAN
+            </h1>
+            <p className="text-xs text-slate-600 mt-0.5">
+              Kelas: {kelasList.find((k) => String(k?.id) === selectedKelasId)?.nama || '-'} • Tanggal: {new Date(selectedTanggal).toLocaleDateString('id-ID', { dateStyle: 'full' })} • TA {activeTa?.tahun || '-'}
+            </p>
+          </div>
           {isLoadingHarian ? (
             <div className="p-6">
               <TableSkeleton rows={5} cols={5} />
@@ -403,8 +443,8 @@ export function AbsensiPage() {
                         </td>
                         <td className="py-3.5 px-4 font-bold text-slate-900">{sNama}</td>
                         <td className="py-3.5 px-4 font-mono text-slate-600">{sNis}</td>
-                        <td className="py-3.5 px-4 text-center">
-                          <div className="inline-flex rounded-xl p-1 bg-slate-100 border border-slate-200 gap-1">
+                        <td className="py-2.5 px-3 text-center">
+                          <div className="inline-flex rounded-xl p-1 bg-slate-100 border border-slate-200 gap-1 print:hidden">
                             <button
                               type="button"
                               onClick={() => handleStatusChange(sId, 'H')}
@@ -454,14 +494,24 @@ export function AbsensiPage() {
                               A
                             </button>
                           </div>
+                          {/* Label Khusus Print */}
+                          <span className="hidden print:inline-block font-extrabold text-xs">
+                            {currentStatus === 'H'
+                              ? 'HADIR'
+                              : currentStatus === 'I'
+                              ? 'IZIN'
+                              : currentStatus === 'S'
+                              ? 'SAKIT'
+                              : 'ALPA'}
+                          </span>
                         </td>
-                        <td className="py-3.5 px-4">
+                        <td className="py-2.5 px-3">
                           <input
                             type="text"
                             value={currentCatatan}
                             onChange={(e) => handleCatatanChange(sId, e.target.value)}
                             placeholder="Alasan izin / sakit..."
-                            className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-emerald-600"
+                            className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-emerald-600 print:border-none print:p-0"
                           />
                         </td>
                       </tr>
@@ -471,12 +521,57 @@ export function AbsensiPage() {
               </table>
             </div>
           )}
+
+          {/* Tanda Tangan Absensi Harian */}
+          <div className="signature-block print-avoid-break print:grid hidden grid-cols-2 gap-8 text-center text-xs mt-6 pt-3">
+            <div>
+              <p className="text-slate-500">Mengetahui,</p>
+              <p className="font-semibold text-slate-800">Kepala Madrasah</p>
+              <div className="h-14" />
+              <p className="font-bold text-slate-900 border-t border-slate-400 inline-block px-8">
+                ( ..................................... )
+              </p>
+            </div>
+            <div>
+              <p className="text-slate-500">
+                Dicetak pada {new Date().toLocaleDateString('id-ID', { dateStyle: 'long' })}
+              </p>
+              <p className="font-semibold text-slate-800">Guru Piket / Wali Kelas</p>
+              <div className="h-14" />
+              <p className="font-bold text-slate-900 border-t border-slate-400 inline-block px-8">
+                ( ..................................... )
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
       {/* TAB 2 & 3: REKAP BULANAN & SEMESTER */}
       {(activeTab === 'bulanan' || activeTab === 'semester') && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div
+          className={`print-area ${
+            paper === 'f4'
+              ? orientation === 'landscape'
+                ? 'print-f4-landscape sheet-preview-f4-landscape'
+                : 'print-f4 sheet-preview-f4'
+              : orientation === 'landscape'
+              ? 'print-a4-landscape sheet-preview-a4-landscape'
+              : 'print-a4 sheet-preview-a4'
+          } bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden p-4 sm:p-6 print:border-none print:shadow-none print:p-0 text-slate-900`}
+        >
+          {/* Kop Surat Rekapitulasi (Print Only) */}
+          <div className="kop-surat border-b-2 border-slate-800 pb-3 mb-3 text-center print:block hidden">
+            <p className="text-[10px] font-bold tracking-widest text-slate-700 uppercase">
+              KEMENTERIAN AGAMA REPUBLIK INDONESIA
+            </p>
+            <h1 className="text-base font-extrabold uppercase tracking-wider text-slate-900">
+              REKAPITULASI PRESENSI & KEHADIRAN SISWA {activeTab === 'bulanan' ? 'BULANAN' : 'SEMESTER'}
+            </h1>
+            <p className="text-xs text-slate-600 mt-0.5">
+              Kelas: {kelasList.find((k) => String(k?.id) === selectedKelasId)?.nama || '-'} • Periode: {activeTab === 'bulanan' ? `Bulan ke-${rekapBulan} Tahun ${rekapTahun}` : `Semester ${activeTa?.semester} TA ${activeTa?.tahun}`} • Dicetak pada {new Date().toLocaleDateString('id-ID', { dateStyle: 'long' })}
+            </p>
+          </div>
+
           {isLoadingRekap ? (
             <div className="p-6">
               <TableSkeleton rows={5} cols={7} />
@@ -487,18 +582,18 @@ export function AbsensiPage() {
               description="Catatan kehadiran belum terekam pada periode ini."
             />
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto print:overflow-visible">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 border-b border-slate-200/80 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
                   <tr>
-                    <th className="py-3.5 px-4 w-12 text-center">No</th>
-                    <th className="py-3.5 px-4">Nama Siswa</th>
-                    <th className="py-3.5 px-4">NIS</th>
-                    <th className="py-3.5 px-4 text-center">Hadir (H)</th>
-                    <th className="py-3.5 px-4 text-center">Izin (I)</th>
-                    <th className="py-3.5 px-4 text-center">Sakit (S)</th>
-                    <th className="py-3.5 px-4 text-center">Alpa (A)</th>
-                    <th className="py-3.5 px-4 text-center">% Kehadiran</th>
+                    <th className="py-2.5 px-3 w-12 text-center">No</th>
+                    <th className="py-2.5 px-3">Nama Siswa</th>
+                    <th className="py-2.5 px-3 w-28">NIS</th>
+                    <th className="py-2.5 px-3 text-center">Hadir (H)</th>
+                    <th className="py-2.5 px-3 text-center">Izin (I)</th>
+                    <th className="py-2.5 px-3 text-center">Sakit (S)</th>
+                    <th className="py-2.5 px-3 text-center">Alpa (A)</th>
+                    <th className="py-2.5 px-3 text-center">% Kehadiran</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -506,24 +601,24 @@ export function AbsensiPage() {
                     const persen = Number(item?.persentase) || 0;
                     return (
                       <tr key={item?.siswa_id || idx} className="hover:bg-slate-50/70 transition-colors">
-                        <td className="py-3.5 px-4 text-center text-slate-400 font-mono">
+                        <td className="py-2.5 px-3 text-center text-slate-400 font-mono">
                           {idx + 1}
                         </td>
-                        <td className="py-3.5 px-4 font-bold text-slate-900">{item?.nama || '-'}</td>
-                        <td className="py-3.5 px-4 font-mono text-slate-600">{item?.nis || '-'}</td>
-                        <td className="py-3.5 px-4 text-center font-bold text-emerald-700">
+                        <td className="py-2.5 px-3 font-bold text-slate-900">{item?.nama || '-'}</td>
+                        <td className="py-2.5 px-3 font-mono text-slate-600">{item?.nis || '-'}</td>
+                        <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
                           {item?.hadir ?? 0}
                         </td>
-                        <td className="py-3.5 px-4 text-center font-bold text-blue-700">
+                        <td className="py-2.5 px-3 text-center font-bold text-blue-700">
                           {item?.izin ?? 0}
                         </td>
-                        <td className="py-3.5 px-4 text-center font-bold text-amber-700">
+                        <td className="py-2.5 px-3 text-center font-bold text-amber-700">
                           {item?.sakit ?? 0}
                         </td>
-                        <td className="py-3.5 px-4 text-center font-bold text-rose-700">
+                        <td className="py-2.5 px-3 text-center font-bold text-rose-700">
                           {item?.alpa ?? 0}
                         </td>
-                        <td className="py-3.5 px-4 text-center">
+                        <td className="py-2.5 px-3 text-center">
                           <span
                             className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold ${
                               persen >= 85
@@ -543,6 +638,28 @@ export function AbsensiPage() {
               </table>
             </div>
           )}
+
+          {/* Tanda Tangan Rekapitulasi Presensi */}
+          <div className="signature-block print-avoid-break print:grid hidden grid-cols-2 gap-8 text-center text-xs mt-6 pt-3">
+            <div>
+              <p className="text-slate-500">Mengetahui,</p>
+              <p className="font-semibold text-slate-800">Kepala Madrasah</p>
+              <div className="h-14" />
+              <p className="font-bold text-slate-900 border-t border-slate-400 inline-block px-8">
+                ( ..................................... )
+              </p>
+            </div>
+            <div>
+              <p className="text-slate-500">
+                Dicetak pada {new Date().toLocaleDateString('id-ID', { dateStyle: 'long' })}
+              </p>
+              <p className="font-semibold text-slate-800">Wali Kelas</p>
+              <div className="h-14" />
+              <p className="font-bold text-slate-900 border-t border-slate-400 inline-block px-8">
+                ( ..................................... )
+              </p>
+            </div>
+          </div>
         </div>
       )}
     </div>

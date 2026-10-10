@@ -2,124 +2,294 @@
 
 /* ==========================================================================
    SISTEM CETAK BERSAMA (PRINT CSS SYSTEM)
-   Fokus: Rapor Siswa, Kwitansi Pembayaran, Tunggakan, Bukti PPDB
+   Standar Kertas:
+   - A4: 210 x 297 mm
+   - F4 / Folio: 215 x 330 mm (Standar Resmi Madrasah Indonesia)
+   - A5: 148 x 210 mm (Kwitansi & Nota Kasir)
    ========================================================================== */
 
-/* Page sizes using named pages */
+/* Page sizes using named pages & flexible default margins */
 @page {
-  size: A4 portrait;
-  margin: 12mm 15mm;
+  size: 210mm 297mm;
+  margin: 8mm 10mm 8mm 10mm;
 }
 
-@page a4 {
-  size: A4 portrait;
-  margin: 12mm 15mm;
+@page a4-portrait {
+  size: 210mm 297mm;
+  margin: 8mm 10mm 8mm 10mm;
 }
 
-@page a4land {
-  size: A4 landscape;
-  margin: 10mm 12mm;
+@page a4-landscape {
+  size: 297mm 210mm;
+  margin: 8mm 10mm 8mm 10mm;
 }
 
-@page a5 {
-  size: A5 portrait;
-  margin: 10mm 10mm;
+@page f4-portrait {
+  size: 215mm 330mm;
+  margin: 8mm 10mm 8mm 10mm;
+}
+
+@page f4-landscape {
+  size: 330mm 215mm;
+  margin: 8mm 10mm 8mm 10mm;
+}
+
+@page a5-portrait {
+  size: 148mm 210mm;
+  margin: 6mm 8mm 6mm 8mm;
+}
+
+@page a5-landscape {
+  size: 210mm 148mm;
+  margin: 6mm 8mm 6mm 8mm;
+}
+
+/* Screen sheet preview containers */
+.sheet-preview-a4 {
+  max-width: 210mm !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+.sheet-preview-f4 {
+  max-width: 215mm !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+.sheet-preview-a4-landscape {
+  max-width: 297mm !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+.sheet-preview-f4-landscape {
+  max-width: 330mm !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+.sheet-preview-a5 {
+  max-width: 148mm !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
 }
 
 .print-a4 {
-  page: a4;
+  page: a4-portrait;
+}
+
+.print-folio,
+.print-f4 {
+  page: f4-portrait;
 }
 
 .print-a4-landscape {
-  page: a4land;
+  page: a4-landscape;
+}
+
+.print-f4-landscape {
+  page: f4-landscape;
 }
 
 .print-a5 {
-  page: a5;
+  page: a5-portrait;
 }
 
 @media print {
-  /* 1. Reset Root & Container Layout */
-  html,
-  body,
-  #root,
-  div,
-  main,
-  section,
-  article {
-    height: auto !important;
-    max-height: none !important;
-    overflow: visible !important;
-    position: static !important;
-    background: transparent !important;
-    color: #0f172a !important; /* slate-900 */
-    box-shadow: none !important;
+  /* 1. Reset Root, HTML, Body & Container Layout */
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box !important;
   }
 
+  html,
   body {
-    background-color: #ffffff !important;
-    font-size: 11pt !important;
-    line-height: 1.4 !important;
+    width: 100% !important;
+    min-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    position: static !important;
+    background: #ffffff !important;
+    color: #0f172a !important; /* slate-900 */
+    box-shadow: none !important;
+    font-size: 9.5pt !important;
+    line-height: 1.3 !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  /* 2. Sembunyikan elemen UI aplikasi */
+  /* Reset Wrapper Flexbox & Overflow: Hindari pemotongan halaman karena scroll container */
+  #root,
+  #root > div,
+  .min-h-screen,
+  div,
+  main,
+  section,
+  article {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    position: static !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+    transform: none !important;
+  }
+
+  /* 2. Sembunyikan elemen UI aplikasi secara total (Sidebar, Navbar, Tombol, Preloader) */
   aside,
   header,
   nav,
   footer,
-  button,
+  button:not(.print-preserve),
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea,
   .no-print,
-  [role="dialog"] > div:first-child:not(.print-area),
-  .custom-scrollbar {
-    /* Hide navigational Chrome elements */
-  }
-
-  /* Modal specific handling: hide modal overlay backgrounds and close buttons */
+  .print-hide,
+  .print\:hidden,
+  .custom-scrollbar,
+  .siakad-preloader,
+  div[aria-hidden="true"],
   .fixed.inset-0.bg-slate-900\/60,
-  header.sticky,
-  button:not(.print-preserve) {
+  .fixed.inset-0.bg-slate-900\/80 {
     display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
-  /* Hide sidebar and app layout navigation */
-  aside.w-64,
-  header.sticky.top-0,
-  div.custom-scrollbar,
-  .print-hide {
-    display: none !important;
-  }
-
-  /* 3. Tampilkan dan optimalkan .print-area */
+  /* 3. Tampilkan dan optimalkan area cetak (.print-area) */
   .print-area {
     display: block !important;
     width: 100% !important;
-    max-width: none !important;
-    margin: 0 !important;
+    min-width: 0 !important;
+    margin: 0 auto !important;
     padding: 0 !important;
     box-shadow: none !important;
     border: none !important;
     background: #ffffff !important;
+    color: #0f172a !important;
     position: static !important;
     transform: none !important;
+    box-sizing: border-box !important;
   }
 
-  /* Jika modal berisi print-area, pastikan wrapper modal tidak membatasi ukuran */
+  /* Aturan Lebar Sesuai Kertas */
+  .print-a4,
+  html[data-print-paper="a4"] .print-area {
+    width: 100% !important;
+    max-width: 190mm !important;
+  }
+
+  .print-f4,
+  .print-folio,
+  html[data-print-paper="f4"] .print-area {
+    width: 100% !important;
+    max-width: 195mm !important;
+  }
+
+  .print-a4-landscape,
+  html[data-print-paper="a4"][data-print-orientation="landscape"] .print-area {
+    width: 100% !important;
+    max-width: 277mm !important;
+  }
+
+  .print-f4-landscape,
+  html[data-print-paper="f4"][data-print-orientation="landscape"] .print-area {
+    width: 100% !important;
+    max-width: 310mm !important;
+  }
+
+  .print-a5,
+  html[data-print-paper="a5"] .print-area {
+    width: 100% !important;
+    max-width: 136mm !important;
+    margin: 0 auto !important;
+  }
+
+  /* Mode Kompak (Pas 1 Halaman) */
+  html[data-print-compact="true"],
+  .print-compact {
+    font-size: 8.5pt !important;
+    line-height: 1.25 !important;
+  }
+
+  html[data-print-compact="true"] table,
+  .print-compact table {
+    font-size: 8pt !important;
+  }
+
+  html[data-print-compact="true"] th,
+  html[data-print-compact="true"] td,
+  .print-compact th,
+  .print-compact td {
+    padding: 2px 3.5px !important;
+  }
+
+  html[data-print-compact="true"] .kop-logo,
+  .print-compact .kop-logo {
+    width: 48px !important;
+    height: 48px !important;
+  }
+
+  html[data-print-compact="true"] .signature-space,
+  .print-compact .signature-space {
+    height: 38px !important;
+  }
+
+  html[data-print-compact="true"] .section-mb,
+  .print-compact .section-mb {
+    margin-bottom: 6px !important;
+  }
+
+  /* Penanganan Cetak Modal Dialog (Kwitansi) */
+  [role="dialog"],
+  .fixed.z-50:has(.print-area),
   div:has(> .print-area),
   div:has(> * > .print-area) {
+    display: block !important;
+    position: static !important;
+    inset: auto !important;
     overflow: visible !important;
     max-height: none !important;
+    height: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
     border: none !important;
     box-shadow: none !important;
     background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    transform: none !important;
   }
 
-  /* 4. Table Print Formatting */
+  /* Sembunyikan latar belakang halaman saat modal sedang dicetak */
+  body:has([role="dialog"] .print-area) main:not(:has(.print-area)),
+  body:has(.fixed.z-50 .print-area) main:not(:has(.print-area)) {
+    display: none !important;
+  }
+
+  /* 4. Formatting Tabel Cetak */
   table {
     width: 100% !important;
+    max-width: 100% !important;
     border-collapse: collapse !important;
-    font-size: 10pt !important;
+    font-size: 8.5pt !important;
+    line-height: 1.25 !important;
     page-break-inside: auto !important;
   }
 
@@ -131,8 +301,30 @@
     display: table-footer-group !important;
   }
 
-  tr,
-  .print-avoid-break {
+  tr {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  th,
+  td {
+    border: 1px solid #475569 !important; /* slate-600 crisp */
+    padding: 3px 4.5px !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  th {
+    background-color: #f1f5f9 !important; /* slate-100 */
+    color: #0f172a !important;
+    font-weight: 700 !important;
+  }
+
+  /* 5. Elemen yang tidak boleh terpotong perpindahan halaman */
+  .print-avoid-break,
+  .signature-block,
+  .kop-surat,
+  tr {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }
@@ -142,15 +334,39 @@
     page-break-after: avoid !important;
   }
 
-  /* Badge dan background cetak tetap berwarna tajam */
+  /* Garis potong kwitansi 2 rangkap */
+  .print-cut-line {
+    border-top: 1.5px dashed #64748b !important;
+    margin: 12px 0 !important;
+    position: relative;
+    text-align: center;
+  }
+
+  .print-cut-line::after {
+    content: "✂ Gunting / Potong Disini";
+    font-size: 7.5pt;
+    color: #64748b;
+    background: #ffffff;
+    padding: 0 8px;
+    position: relative;
+    top: -8px;
+  }
+
+  /* 6. Penyesuaian ketajaman teks & warna */
   .badge,
   span,
+  p,
+  td,
   th {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  /* Hilangkan underline link pada cetak */
+  .text-slate-400,
+  .text-slate-500 {
+    color: #334155 !important;
+  }
+
   a {
     text-decoration: none !important;
     color: inherit !important;

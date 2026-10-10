@@ -16,7 +16,10 @@ import {
   CheckCircle2,
   AlertCircle,
   Calculator,
+  Printer,
 } from 'lucide-react';
+import { PrintPaperBar } from '../../components/ui/PrintPaperBar';
+import { PaperSize, PaperOrientation, triggerPrint } from '../../lib/print-utils';
 
 const EMPTY_LIST: any[] = [];
 
@@ -30,6 +33,10 @@ export function NilaiPage() {
   // Filter
   const [selectedKelasId, setSelectedKelasId] = useState<string>('');
   const [selectedMapelId, setSelectedMapelId] = useState<string>('');
+
+  // Paper Print State
+  const [paper, setPaper] = useState<PaperSize>('f4');
+  const [orientation, setOrientation] = useState<PaperOrientation>('landscape');
 
   // Modal Bobot
   const [bobotModalOpen, setBobotModalOpen] = useState(false);
@@ -406,8 +413,51 @@ export function NilaiPage() {
         </div>
       </div>
 
-      {/* Spreadsheet Input Table */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+      {/* Print Paper Toolbar */}
+      <PrintPaperBar
+        paper={paper}
+        onPaperChange={setPaper}
+        orientation={orientation}
+        onOrientationChange={setOrientation}
+        allowedPapers={['a4', 'f4']}
+        disabled={nilaiState.length === 0}
+        printLabel="Cetak Leger Nilai"
+        onPrint={() => triggerPrint({ paper, orientation })}
+      />
+
+      {/* Spreadsheet Input Table & Printable Container */}
+      <div
+        className={`print-area ${
+          paper === 'f4'
+            ? orientation === 'landscape'
+              ? 'print-f4-landscape sheet-preview-f4-landscape'
+              : 'print-f4 sheet-preview-f4'
+            : orientation === 'landscape'
+            ? 'print-a4-landscape sheet-preview-a4-landscape'
+            : 'print-a4 sheet-preview-a4'
+        } bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden p-4 sm:p-6 print:border-none print:shadow-none print:p-0 text-slate-900`}
+      >
+        {/* Kop Surat Dokumen Leger Nilai (Print Only) */}
+        <div className="kop-surat border-b-2 border-slate-800 pb-3 mb-3 text-center print:block hidden">
+          <p className="text-[10px] font-bold tracking-widest text-slate-700 uppercase">
+            KEMENTERIAN AGAMA REPUBLIK INDONESIA
+          </p>
+          <h1 className="text-base font-extrabold uppercase tracking-wider text-slate-900">
+            DAFTAR NILAI & LEGER HASIL BELAJAR SISWA
+          </h1>
+          <p className="text-xs text-slate-600 mt-0.5">
+            Mata Pelajaran: {currentMapel?.nama || '-'} ({currentMapel?.kode || '-'}) • KKM: {currentKkm} • Kelas: {kelasList.find((k) => String(k?.id) === selectedKelasId)?.nama || '-'} • TA {activeTa?.tahun || '-'} ({activeTa?.semester || '-'}) • Dicetak: {new Date().toLocaleDateString('id-ID', { dateStyle: 'long' })}
+          </p>
+        </div>
+
+        {/* Ringkasan Parameter Nilai Saat Cetak */}
+        <div className="print:grid hidden grid-cols-4 gap-3 p-2 bg-slate-50 border border-slate-300 rounded-lg mb-3 text-xs">
+          <div><span className="text-slate-500 text-[10px] block">Mata Pelajaran:</span> <strong>{currentMapel?.nama || '-'}</strong></div>
+          <div><span className="text-slate-500 text-[10px] block">Kelas / Rombel:</span> <strong>Kelas {kelasList.find((k) => String(k?.id) === selectedKelasId)?.nama || '-'}</strong></div>
+          <div><span className="text-slate-500 text-[10px] block">KKM / Ketuntasan:</span> <strong>{currentKkm}</strong></div>
+          <div><span className="text-slate-500 text-[10px] block">Jumlah Siswa:</span> <strong>{nilaiState.length} Siswa</strong></div>
+        </div>
+
         {isLoading ? (
           <div className="p-6">
             <TableSkeleton rows={5} cols={9} />
@@ -423,40 +473,41 @@ export function NilaiPage() {
             description="Tempatkan siswa ke dalam rombel ini terlebih dahulu melalui menu Penempatan Kelas."
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+          <div className="overflow-x-auto print:overflow-visible">
+            <table className="w-full text-left text-xs border-collapse">
               <thead className="bg-slate-50 border-b border-slate-200/80 text-slate-700 font-semibold uppercase tracking-wider text-[11px]">
                 <tr>
-                  <th className="py-3 px-3 w-10 text-center">No</th>
-                  <th className="py-3 px-3 min-w-[180px]">Nama Siswa</th>
-                  <th className="py-3 px-2 w-20 text-center">Tugas ({bobotForm.bobot_tugas}%)</th>
-                  <th className="py-3 px-2 w-20 text-center">UH ({bobotForm.bobot_uh}%)</th>
-                  <th className="py-3 px-2 w-20 text-center">UTS ({bobotForm.bobot_uts}%)</th>
-                  <th className="py-3 px-2 w-20 text-center">UAS ({bobotForm.bobot_uas}%)</th>
-                  <th className="py-3 px-2 w-24 text-center">Keterampilan ({bobotForm.bobot_keterampilan}%)</th>
-                  <th className="py-3 px-2 w-20 text-center bg-emerald-50/70 text-emerald-900 font-bold">
+                  <th className="py-2.5 px-2.5 w-10 text-center">No</th>
+                  <th className="py-2.5 px-3 min-w-[180px]">Nama Siswa</th>
+                  <th className="py-2.5 px-2 w-20 text-center">Tugas ({bobotForm.bobot_tugas}%)</th>
+                  <th className="py-2.5 px-2 w-20 text-center">UH ({bobotForm.bobot_uh}%)</th>
+                  <th className="py-2.5 px-2 w-20 text-center">UTS ({bobotForm.bobot_uts}%)</th>
+                  <th className="py-2.5 px-2 w-20 text-center">UAS ({bobotForm.bobot_uas}%)</th>
+                  <th className="py-2.5 px-2 w-24 text-center">Keterampilan ({bobotForm.bobot_keterampilan}%)</th>
+                  <th className="py-2.5 px-2 w-20 text-center bg-emerald-50/70 text-emerald-900 font-bold">
                     Nilai Akhir
                   </th>
-                  <th className="py-3 px-2 w-16 text-center bg-emerald-50/70 text-emerald-900 font-bold">
+                  <th className="py-2.5 px-2 w-16 text-center bg-emerald-50/70 text-emerald-900 font-bold">
                     Predikat
                   </th>
-                  <th className="py-3 px-3 min-w-[160px]">Catatan / Keterangan</th>
+                  <th className="py-2.5 px-3 min-w-[160px]">Catatan / Keterangan</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
                 {nilaiState.map((row, idx) => {
                   return (
                     <tr key={row.siswa_id || idx} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="py-2.5 px-3 text-center text-slate-400 font-mono">
+                      <td className="py-2 px-2.5 text-center text-slate-400 font-mono">
                         {idx + 1}
                       </td>
-                      <td className="py-2.5 px-3">
+                      <td className="py-2 px-3">
                         <div className="font-bold text-slate-900">{row.nama}</div>
                         <div className="text-[10px] text-slate-400 font-mono">NIS: {row.nis}</div>
                       </td>
 
                       {/* Tugas */}
-                      <td className="py-2 px-1 text-center">
+                      <td className="py-2 px-1 text-center font-mono">
+                        <span className="hidden print:inline-block font-semibold">{row.nilai_tugas || 0}</span>
                         <input
                           type="number"
                           min={0}
@@ -464,12 +515,13 @@ export function NilaiPage() {
                           disabled={!canEdit}
                           value={row.nilai_tugas || ''}
                           onChange={(e) => handleScoreChange(idx, 'nilai_tugas', e.target.value)}
-                          className="w-16 px-1.5 py-1 text-center font-semibold text-xs border border-slate-200 rounded-lg focus:outline-emerald-600 bg-white"
+                          className="w-16 px-1.5 py-1 text-center font-semibold text-xs border border-slate-200 rounded-lg focus:outline-emerald-600 bg-white print:hidden"
                         />
                       </td>
 
                       {/* UH */}
-                      <td className="py-2 px-1 text-center">
+                      <td className="py-2 px-1 text-center font-mono">
+                        <span className="hidden print:inline-block font-semibold">{row.nilai_uh || 0}</span>
                         <input
                           type="number"
                           min={0}
@@ -477,12 +529,13 @@ export function NilaiPage() {
                           disabled={!canEdit}
                           value={row.nilai_uh || ''}
                           onChange={(e) => handleScoreChange(idx, 'nilai_uh', e.target.value)}
-                          className="w-16 px-1.5 py-1 text-center font-semibold text-xs border border-slate-200 rounded-lg focus:outline-emerald-600 bg-white"
+                          className="w-16 px-1.5 py-1 text-center font-semibold text-xs border border-slate-200 rounded-lg focus:outline-emerald-600 bg-white print:hidden"
                         />
                       </td>
 
                       {/* UTS */}
-                      <td className="py-2 px-1 text-center">
+                      <td className="py-2 px-1 text-center font-mono">
+                        <span className="hidden print:inline-block font-semibold">{row.nilai_uts || 0}</span>
                         <input
                           type="number"
                           min={0}
@@ -490,12 +543,13 @@ export function NilaiPage() {
                           disabled={!canEdit}
                           value={row.nilai_uts || ''}
                           onChange={(e) => handleScoreChange(idx, 'nilai_uts', e.target.value)}
-                          className="w-16 px-1.5 py-1 text-center font-semibold text-xs border border-slate-200 rounded-lg focus:outline-emerald-600 bg-white"
+                          className="w-16 px-1.5 py-1 text-center font-semibold text-xs border border-slate-200 rounded-lg focus:outline-emerald-600 bg-white print:hidden"
                         />
                       </td>
 
                       {/* UAS */}
-                      <td className="py-2 px-1 text-center">
+                      <td className="py-2 px-1 text-center font-mono">
+                        <span className="hidden print:inline-block font-semibold">{row.nilai_uas || 0}</span>
                         <input
                           type="number"
                           min={0}
@@ -503,12 +557,13 @@ export function NilaiPage() {
                           disabled={!canEdit}
                           value={row.nilai_uas || ''}
                           onChange={(e) => handleScoreChange(idx, 'nilai_uas', e.target.value)}
-                          className="w-16 px-1.5 py-1 text-center font-semibold text-xs border border-slate-200 rounded-lg focus:outline-emerald-600 bg-white"
+                          className="w-16 px-1.5 py-1 text-center font-semibold text-xs border border-slate-200 rounded-lg focus:outline-emerald-600 bg-white print:hidden"
                         />
                       </td>
 
                       {/* Keterampilan */}
-                      <td className="py-2 px-1 text-center">
+                      <td className="py-2 px-1 text-center font-mono">
+                        <span className="hidden print:inline-block font-semibold">{row.nilai_keterampilan || 0}</span>
                         <input
                           type="number"
                           min={0}
@@ -516,7 +571,7 @@ export function NilaiPage() {
                           disabled={!canEdit}
                           value={row.nilai_keterampilan || ''}
                           onChange={(e) => handleScoreChange(idx, 'nilai_keterampilan', e.target.value)}
-                          className="w-16 px-1.5 py-1 text-center font-semibold text-xs border border-slate-200 rounded-lg focus:outline-emerald-600 bg-white"
+                          className="w-16 px-1.5 py-1 text-center font-semibold text-xs border border-slate-200 rounded-lg focus:outline-emerald-600 bg-white print:hidden"
                         />
                       </td>
 
@@ -544,13 +599,16 @@ export function NilaiPage() {
 
                       {/* Catatan */}
                       <td className="py-2 px-3">
+                        <span className="hidden print:inline-block text-xs text-slate-700">
+                          {row.catatan || (row.nilai_akhir >= currentKkm ? 'Tuntas' : 'Perlu bimbingan')}
+                        </span>
                         <input
                           type="text"
                           disabled={!canEdit}
                           value={row.catatan}
                           placeholder={row.nilai_akhir >= currentKkm ? 'Tuntas' : 'Perlu bimbingan'}
                           onChange={(e) => handleScoreChange(idx, 'catatan', e.target.value)}
-                          className="w-full px-2 py-1 text-xs border border-slate-200 rounded-lg focus:outline-emerald-600 bg-white text-slate-700"
+                          className="w-full px-2 py-1 text-xs border border-slate-200 rounded-lg focus:outline-emerald-600 bg-white text-slate-700 print:hidden"
                         />
                       </td>
                     </tr>
@@ -560,6 +618,28 @@ export function NilaiPage() {
             </table>
           </div>
         )}
+
+        {/* Lembar Tanda Tangan Cetak Leger Nilai */}
+        <div className="signature-block print-avoid-break print:grid hidden grid-cols-2 gap-8 text-center text-xs mt-6 pt-3">
+          <div>
+            <p className="text-slate-500">Mengetahui,</p>
+            <p className="font-semibold text-slate-800">Kepala Madrasah / Waka Kurikulum</p>
+            <div className="h-14" />
+            <p className="font-bold text-slate-900 border-t border-slate-400 inline-block px-8">
+              ( ..................................... )
+            </p>
+          </div>
+          <div>
+            <p className="text-slate-500">
+              Dicetak tanggal {new Date().toLocaleDateString('id-ID', { dateStyle: 'long' })}
+            </p>
+            <p className="font-semibold text-slate-800">Guru Mata Pelajaran</p>
+            <div className="h-14" />
+            <p className="font-bold text-slate-900 border-t border-slate-400 inline-block px-8">
+              ( ..................................... )
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Modal Atur Bobot Penilaian */}

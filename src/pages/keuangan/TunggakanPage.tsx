@@ -10,6 +10,8 @@ import {
 } from '../../types';
 import { TableSkeleton } from '../../components/ui/Skeleton';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { PrintPaperBar } from '../../components/ui/PrintPaperBar';
+import { PaperSize, PaperOrientation, triggerPrint } from '../../lib/print-utils';
 import {
   AlertCircle,
   Building2,
@@ -28,6 +30,8 @@ export function TunggakanPage() {
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<'per-siswa' | 'per-kelas'>('per-siswa');
+  const [paper, setPaper] = useState<PaperSize>('a4');
+  const [orientation, setOrientation] = useState<PaperOrientation>('landscape');
 
   // Filters
   const [selectedTaId, setSelectedTaId] = useState<string>('');
@@ -82,7 +86,7 @@ export function TunggakanPage() {
   });
 
   const handlePrint = () => {
-    window.print();
+    triggerPrint({ paper, orientation });
   };
 
   const totalAkumulasiTunggakan = tunggakanSiswaList.reduce(
@@ -102,14 +106,6 @@ export function TunggakanPage() {
             Monitoring tunggakan pembayaran per siswa dan per rombongan belajar tahun ajaran {activeTa?.tahun || '-'}.
           </p>
         </div>
-
-        <button
-          onClick={handlePrint}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-        >
-          <Printer className="w-4 h-4" />
-          Cetak Rekap / Surat Tagihan
-        </button>
       </div>
 
       {/* Tabs & Filter Bar - Hidden on Print */}
@@ -201,21 +197,152 @@ export function TunggakanPage() {
             </div>
           </div>
         </div>
+
+        {/* Print Control Toolbar */}
+        <PrintPaperBar
+          paper={paper}
+          onPaperChange={setPaper}
+          orientation={orientation}
+          onOrientationChange={setOrientation}
+          allowedPapers={['a4', 'f4']}
+          printLabel="Cetak Rekap Tunggakan"
+          onPrint={handlePrint}
+        />
       </div>
 
-      {/* Printable Sheet View for Printing */}
-      <div className="print-area print-a4-landscape print:block hidden mb-6 text-center border-b pb-4">
-        <h1 className="text-lg font-bold uppercase tracking-wider">
-          DAFTAR TUNGGAKAN PEMBAYARAN SISWA
-        </h1>
-        <p className="text-xs text-slate-600">
-          Tahun Ajaran {activeTa?.tahun || '-'} — Dicetak pada {new Date().toLocaleDateString('id-ID')}
-        </p>
+      {/* Printable Sheet View for Printing (A4/F4 Landscape/Portrait) */}
+      <div
+        className={`print-area ${
+          paper === 'f4'
+            ? orientation === 'landscape'
+              ? 'print-f4-landscape sheet-preview-f4-landscape'
+              : 'print-f4 sheet-preview-f4'
+            : orientation === 'landscape'
+            ? 'print-a4-landscape sheet-preview-a4-landscape'
+            : 'print-a4 sheet-preview-a4'
+        } print:block hidden mb-6 text-slate-900`}
+      >
+        <div className="text-center border-b-2 border-slate-800 pb-3 mb-4">
+          <p className="text-[10px] font-bold tracking-widest text-slate-700 uppercase">
+            KEMENTERIAN AGAMA REPUBLIK INDONESIA
+          </p>
+          <h1 className="text-base font-extrabold uppercase tracking-wider text-slate-900">
+            LAPORAN REKAPITULASI TUNGGAKAN PEMBAYARAN SISWA
+          </h1>
+          <p className="text-xs text-slate-600">
+            Tahun Ajaran {activeTa?.tahun || '-'} ({activeTa?.semester || '-'}) • Dicetak pada {new Date().toLocaleDateString('id-ID', { dateStyle: 'long' })}
+          </p>
+        </div>
+
+        {activeTab === 'per-siswa' ? (
+          <div>
+            <table className="w-full text-xs border border-slate-400 border-collapse">
+              <thead>
+                <tr className="bg-slate-100 border-b border-slate-400 text-slate-800 font-bold">
+                  <th className="py-1.5 px-2 text-center w-8 border-r border-slate-400">No</th>
+                  <th className="py-1.5 px-2 text-center w-20 border-r border-slate-400">NIS</th>
+                  <th className="py-1.5 px-3 text-left border-r border-slate-400">Nama Siswa</th>
+                  <th className="py-1.5 px-2 text-center w-16 border-r border-slate-400">Kelas</th>
+                  <th className="py-1.5 px-3 text-left border-r border-slate-400">Rincian Pos Tunggakan</th>
+                  <th className="py-1.5 px-3 text-right w-28 border-r border-slate-400 font-mono">Total (Rp)</th>
+                  <th className="py-1.5 px-2 text-left w-28">No. HP Orang Tua</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-300">
+                {tunggakanSiswaList.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-4 text-center text-slate-500 italic">
+                      Tidak ada siswa yang memiliki tunggakan pembayaran.
+                    </td>
+                  </tr>
+                ) : (
+                  tunggakanSiswaList.map((item, idx) => (
+                    <tr key={idx}>
+                      <td className="py-1.5 px-2 text-center font-mono border-r border-slate-300">{idx + 1}</td>
+                      <td className="py-1.5 px-2 text-center font-mono border-r border-slate-300">{item.siswa?.nis || '-'}</td>
+                      <td className="py-1.5 px-3 font-semibold border-r border-slate-300">{item.siswa?.nama || '-'}</td>
+                      <td className="py-1.5 px-2 text-center border-r border-slate-300">{item.kelas?.nama || '-'}</td>
+                      <td className="py-1.5 px-3 border-r border-slate-300">
+                        {item.itemTunggakan.map((sub) => `${sub.namaPembayaran}${sub.bulan ? ` (${sub.bulan})` : ''}: Rp ${Number(sub.sisa).toLocaleString('id-ID')}`).join('; ')}
+                      </td>
+                      <td className="py-1.5 px-3 text-right font-mono font-bold border-r border-slate-300 text-slate-900">
+                        Rp {Number(item.totalTunggakan).toLocaleString('id-ID')}
+                      </td>
+                      <td className="py-1.5 px-2 text-slate-700 font-mono text-[11px]">{item.siswa?.telepon_ortu || '-'}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+              <tfoot>
+                <tr className="bg-slate-100 font-bold border-t-2 border-slate-400">
+                  <td colSpan={5} className="py-2 px-3 text-right">TOTAL KESELURUHAN TUNGGAKAN:</td>
+                  <td className="py-2 px-3 text-right font-mono text-slate-900 font-black">
+                    Rp {Number(totalAkumulasiTunggakan).toLocaleString('id-ID')}
+                  </td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        ) : (
+          <div>
+            <table className="w-full text-xs border border-slate-400 border-collapse">
+              <thead>
+                <tr className="bg-slate-100 border-b border-slate-400 text-slate-800 font-bold">
+                  <th className="py-1.5 px-2 text-center w-8 border-r border-slate-400">No</th>
+                  <th className="py-1.5 px-3 text-left border-r border-slate-400">Kelas / Rombel</th>
+                  <th className="py-1.5 px-3 text-left border-r border-slate-400">Wali Kelas</th>
+                  <th className="py-1.5 px-2 text-center border-r border-slate-400">Total Siswa</th>
+                  <th className="py-1.5 px-3 text-right border-r border-slate-400 font-mono">Total Tagihan</th>
+                  <th className="py-1.5 px-3 text-right border-r border-slate-400 font-mono">Terbayar</th>
+                  <th className="py-1.5 px-3 text-right border-r border-slate-400 font-mono">Tunggakan</th>
+                  <th className="py-1.5 px-2 text-center">Menunggak</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-300">
+                {tunggakanKelasList.map((k, idx) => (
+                  <tr key={idx}>
+                    <td className="py-1.5 px-2 text-center font-mono border-r border-slate-300">{idx + 1}</td>
+                    <td className="py-1.5 px-3 font-semibold border-r border-slate-300">Kelas {k.kelas_nama}</td>
+                    <td className="py-1.5 px-3 border-r border-slate-300">{k.wali_kelas_nama}</td>
+                    <td className="py-1.5 px-2 text-center border-r border-slate-300">{k.totalSiswa} Siswa</td>
+                    <td className="py-1.5 px-3 text-right font-mono border-r border-slate-300">Rp {Number(k.totalTagihan).toLocaleString('id-ID')}</td>
+                    <td className="py-1.5 px-3 text-right font-mono border-r border-slate-300">Rp {Number(k.totalTerbayar).toLocaleString('id-ID')}</td>
+                    <td className="py-1.5 px-3 text-right font-mono font-bold border-r border-slate-300">Rp {Number(k.totalTunggakan).toLocaleString('id-ID')}</td>
+                    <td className="py-1.5 px-2 text-center font-bold">{k.siswaMenunggakCount} Siswa</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Lembar Tanda Tangan */}
+        <div className="grid grid-cols-2 gap-8 text-center text-xs mt-8 pt-4 print-avoid-break">
+          <div>
+            <p className="text-slate-500">Mengetahui,</p>
+            <p className="font-semibold text-slate-800">Kepala Madrasah</p>
+            <div className="h-16" />
+            <p className="font-bold text-slate-900 border-t border-slate-400 inline-block px-8">
+              ( ..................................... )
+            </p>
+          </div>
+          <div>
+            <p className="text-slate-500">
+              Dicetak tanggal {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+            </p>
+            <p className="font-semibold text-slate-800">Bendahara / Bagian Keuangan</p>
+            <div className="h-16" />
+            <p className="font-bold text-slate-900 border-t border-slate-400 inline-block px-8">
+              ( ..................................... )
+            </p>
+          </div>
+        </div>
       </div>
 
-      {/* TAB 1: RINCIAN PER SISWA */}
+      {/* TAB 1: RINCIAN PER SISWA (Screen only) */}
       {activeTab === 'per-siswa' && (
-        <div className="space-y-4">
+        <div className="space-y-4 print:hidden">
           {isLoadingSiswa ? (
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
               <TableSkeleton rows={5} cols={6} />
@@ -307,7 +434,7 @@ export function TunggakanPage() {
 
       {/* TAB 2: REKAPITULASI PER KELAS */}
       {activeTab === 'per-kelas' && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden print:hidden">
           {isLoadingKelas ? (
             <div className="p-6">
               <TableSkeleton rows={4} cols={7} />

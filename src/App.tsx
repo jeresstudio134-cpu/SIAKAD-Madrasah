@@ -30,6 +30,7 @@ import { PPDBPublicPage } from './pages/ppdb/PPDBPublicPage';
 import { PPDBAdminPage } from './pages/ppdb/PPDBAdminPage';
 import { PengumumanPage } from './pages/informasi/PengumumanPage';
 import { KalenderAkademikPage } from './pages/informasi/KalenderAkademikPage';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { School } from 'lucide-react';
 
 const queryClient = new QueryClient({
@@ -73,60 +74,62 @@ export default function App() {
       <ToastProvider>
         <AuthProvider>
           <BrowserRouter>
-            <Routes>
-              {/* Public Login Route */}
-              <Route path="/login" element={<LoginPage />} />
+            <ErrorBoundary>
+              <Routes>
+                {/* Public Login Route */}
+                <Route path="/login" element={<LoginPage />} />
 
-              {/* Protected App Routes */}
-              <Route
-                path="/"
-                element={
-                  <ProtectedRoute>
-                    <AppLayout />
-                  </ProtectedRoute>
-                }
-              >
-                <Route index element={<DashboardPage />} />
-                <Route path="tahun-ajaran" element={<TahunAjaranPage />} />
-                <Route path="kelas" element={<KelasPage />} />
-                <Route path="mapel" element={<MapelPage />} />
-                <Route path="guru" element={<GuruPage />} />
-                <Route path="siswa" element={<SiswaPage />} />
-                <Route path="pengaturan" element={<PengaturanPage />} />
-                <Route path="staf" element={<StafPage />} />
-                <Route path="audit-log" element={<AuditLogPage />} />
+                {/* Protected App Routes */}
+                <Route
+                  path="/"
+                  element={
+                    <ProtectedRoute>
+                      <AppLayout />
+                    </ProtectedRoute>
+                  }
+                >
+                  <Route index element={<DashboardPage />} />
+                  <Route path="tahun-ajaran" element={<TahunAjaranPage />} />
+                  <Route path="kelas" element={<KelasPage />} />
+                  <Route path="mapel" element={<MapelPage />} />
+                  <Route path="guru" element={<GuruPage />} />
+                  <Route path="siswa" element={<SiswaPage />} />
+                  <Route path="pengaturan" element={<PengaturanPage />} />
+                  <Route path="staf" element={<StafPage />} />
+                  <Route path="audit-log" element={<AuditLogPage />} />
 
-                {/* Modul Akademik Routes */}
-                <Route path="akademik/penempatan" element={<PenempatanKelasPage />} />
-                <Route path="akademik/penugasan" element={<PenugasanGuruPage />} />
-                <Route path="akademik/jadwal" element={<JadwalPelajaranPage />} />
-                <Route path="akademik/absensi" element={<AbsensiPage />} />
-                <Route path="akademik/nilai" element={<NilaiPage />} />
-                <Route path="akademik/sikap-tahfidz" element={<SikapTahfidzPage />} />
-                <Route path="akademik/rapor" element={<RaporPage />} />
+                  {/* Modul Akademik Routes */}
+                  <Route path="akademik/penempatan" element={<PenempatanKelasPage />} />
+                  <Route path="akademik/penugasan" element={<PenugasanGuruPage />} />
+                  <Route path="akademik/jadwal" element={<JadwalPelajaranPage />} />
+                  <Route path="akademik/absensi" element={<AbsensiPage />} />
+                  <Route path="akademik/nilai" element={<NilaiPage />} />
+                  <Route path="akademik/sikap-tahfidz" element={<SikapTahfidzPage />} />
+                  <Route path="akademik/rapor" element={<RaporPage />} />
 
-                {/* Modul Keuangan Routes */}
-                <Route path="keuangan" element={<DashboardKeuanganPage />} />
-                <Route path="keuangan/jenis" element={<JenisPembayaranPage />} />
-                <Route path="keuangan/tagihan" element={<TagihanPage />} />
-                <Route path="keuangan/pembayaran" element={<PembayaranPage />} />
-                <Route path="keuangan/tunggakan" element={<TunggakanPage />} />
-                <Route path="keuangan/laporan" element={<LaporanKeuanganPage />} />
+                  {/* Modul Keuangan Routes */}
+                  <Route path="keuangan" element={<DashboardKeuanganPage />} />
+                  <Route path="keuangan/jenis" element={<JenisPembayaranPage />} />
+                  <Route path="keuangan/tagihan" element={<TagihanPage />} />
+                  <Route path="keuangan/pembayaran" element={<PembayaranPage />} />
+                  <Route path="keuangan/tunggakan" element={<TunggakanPage />} />
+                  <Route path="keuangan/laporan" element={<LaporanKeuanganPage />} />
 
-                {/* Modul PPDB Internal (Admin / Staf TU) */}
-                <Route path="ppdb/admin" element={<PPDBAdminPage />} />
+                  {/* Modul PPDB Internal (Admin / Staf TU) */}
+                  <Route path="ppdb/admin" element={<PPDBAdminPage />} />
 
-                {/* Pengumuman & Kalender Akademik */}
-                <Route path="pengumuman" element={<PengumumanPage />} />
-                <Route path="kalender" element={<KalenderAkademikPage />} />
-              </Route>
+                  {/* Pengumuman & Kalender Akademik */}
+                  <Route path="pengumuman" element={<PengumumanPage />} />
+                  <Route path="kalender" element={<KalenderAkademikPage />} />
+                </Route>
 
-              {/* Rute Publik PPDB (Tanpa Login) */}
-              <Route path="ppdb" element={<PPDBPublicPage />} />
+                {/* Rute Publik PPDB (Tanpa Login) */}
+                <Route path="ppdb" element={<PPDBPublicPage />} />
 
-              {/* Fallback */}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+                {/* Fallback */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </ErrorBoundary>
           </BrowserRouter>
         </AuthProvider>
       </ToastProvider>

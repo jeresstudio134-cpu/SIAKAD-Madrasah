@@ -18,6 +18,7 @@ import {
   Calendar,
   CheckCircle2,
   AlertTriangle,
+  AlertCircle,
 } from 'lucide-react';
 
 export function PenempatanKelasPage() {
@@ -40,47 +41,55 @@ export function PenempatanKelasPage() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Queries
-  const { data: taList = [] } = useQuery({
+  const { data: rawTaList = [], isLoading: isLoadingTa } = useQuery({
     queryKey: ['tahun-ajaran'],
     queryFn: async () => {
       const res = await api.get<TahunAjaran[]>('/api/tahun-ajaran');
-      return res.data || [];
+      return Array.isArray(res.data) ? res.data : [];
     },
   });
 
-  const activeTa = taList.find((t) => t.is_active) || taList[0];
+  const taList = Array.isArray(rawTaList) ? rawTaList : [];
+  const activeTa = taList.find((t) => t?.is_active) || taList[0];
 
-  const { data: kelasList = [] } = useQuery({
+  const { data: rawKelasList = [] } = useQuery({
     queryKey: ['kelas-simple'],
     queryFn: async () => {
       const res = await api.get<Kelas[]>('/api/kelas/simple');
-      return res.data || [];
+      return Array.isArray(res.data) ? res.data : [];
     },
   });
 
+  const kelasList = Array.isArray(rawKelasList) ? rawKelasList : [];
+
   // Query Penempatan per kelas
-  const { data: penempatanList = [], isLoading: isLoadingPenempatan } = useQuery({
+  const { data: rawPenempatanList = [], isLoading: isLoadingPenempatan } = useQuery({
     queryKey: ['penempatan', selectedKelasId, activeTa?.id],
     queryFn: async () => {
+      if (!activeTa) return [];
       const params = new URLSearchParams();
       if (selectedKelasId) params.append('kelas_id', selectedKelasId);
-      if (activeTa) params.append('tahun_ajaran_id', String(activeTa.id));
+      params.append('tahun_ajaran_id', String(activeTa.id));
       const res = await api.get<PenempatanSiswa[]>(`/api/akademik/penempatan?${params.toString()}`);
-      return res.data || [];
+      return Array.isArray(res.data) ? res.data : [];
     },
     enabled: Boolean(activeTa),
   });
 
+  const penempatanList = Array.isArray(rawPenempatanList) ? rawPenempatanList : [];
+
   // Query Siswa yang belum memiliki kelas di tahun ajaran ini
-  const { data: unassignedSiswa = [], isLoading: isLoadingUnassigned } = useQuery({
+  const { data: rawUnassignedSiswa = [], isLoading: isLoadingUnassigned } = useQuery({
     queryKey: ['unassigned-siswa', activeTa?.id],
     queryFn: async () => {
       if (!activeTa) return [];
       const res = await api.get<Siswa[]>(`/api/akademik/penempatan/unassigned?tahun_ajaran_id=${activeTa.id}`);
-      return res.data || [];
+      return Array.isArray(res.data) ? res.data : [];
     },
     enabled: Boolean(activeTa),
   });
+
+  const unassignedSiswa = Array.isArray(rawUnassignedSiswa) ? rawUnassignedSiswa : [];
 
   // Toggle selection helper
   const toggleSelectSiswa = (id: number) => {
@@ -90,10 +99,11 @@ export function PenempatanKelasPage() {
   };
 
   const selectAll = (ids: number[]) => {
-    if (selectedSiswaIds.length === ids.length) {
+    const validIds = ids.filter((id): id is number => typeof id === 'number' && !isNaN(id));
+    if (selectedSiswaIds.length === validIds.length) {
       setSelectedSiswaIds([]);
     } else {
-      setSelectedSiswaIds(ids);
+      setSelectedSiswaIds(validIds);
     }
   };
 
@@ -161,7 +171,7 @@ export function PenempatanKelasPage() {
   // 3. Kelulusan massal
   const handleBatchKelulusan = async () => {
     if (selectedSiswaIds.length === 0) {
-      warning('Pilih siswa yang akan dinyatakan lulus.');
+      warning('Pilih minimal satu siswa untuk dinyatakan lulus.');
       return;
     }
 
@@ -173,10 +183,9 @@ export function PenempatanKelasPage() {
       });
 
       if (res.success) {
-        success(res.message || 'Kelulusan massal berhasil diproses.');
+        success(res.message || 'Penetapan kelulusan berhasil diproses.');
         setSelectedSiswaIds([]);
         queryClient.invalidateQueries({ queryKey: ['penempatan'] });
-        queryClient.invalidateQueries({ queryKey: ['unassigned-siswa'] });
         queryClient.invalidateQueries({ queryKey: ['siswa'] });
       }
     } catch (err: any) {
@@ -185,6 +194,24 @@ export function PenempatanKelasPage() {
       setIsProcessing(false);
     }
   };
+
+  if (isLoadingTa) {
+    return (
+      <div className="bg-white p-8 rounded-2xl border border-slate-200/80 shadow-xs">
+        <TableSkeleton rows={6} cols={5} />
+      </div>
+    );
+  }
+
+  if (!activeTa) {
+    return (
+      <EmptyState
+        title="Belum Ada Tahun Ajaran Aktif"
+        description="Belum ada tahun ajaran aktif, atur di menu Tahun Ajaran."
+        icon={<AlertCircle className="w-8 h-8 text-amber-600" />}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -195,7 +222,7 @@ export function PenempatanKelasPage() {
             Penempatan Siswa, Kenaikan Kelas & Kelulusan
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Pengelolaan rombel per tahun ajaran ({activeTa?.tahun} {activeTa?.semester}), kenaikan kelas berjenjang, dan penetapan status kelulusan massal.
+            Pengelolaan rombel per tahun ajaran ({activeTa?.tahun || '-'} {activeTa?.semester || '-'}), kenaikan kelas berjenjang, dan penetapan status kelulusan massal.
           </p>
         </div>
       </div>
@@ -278,8 +305,8 @@ export function PenempatanKelasPage() {
               >
                 <option value="">Semua Rombel</option>
                 {kelasList.map((k) => (
-                  <option key={k.id} value={k.id}>
-                    Kelas {k.nama} (Tingkat {k.tingkat})
+                  <option key={k?.id} value={k?.id}>
+                    Kelas {k?.nama} (Tingkat {k?.tingkat})
                   </option>
                 ))}
               </select>
@@ -313,32 +340,32 @@ export function PenempatanKelasPage() {
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-slate-700">
                     {penempatanList.map((item) => (
-                      <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
+                      <tr key={item?.id} className="hover:bg-slate-50/70 transition-colors">
                         <td className="py-3.5 px-4 font-bold text-slate-900">
-                          {item.siswa?.nama}
+                          {item?.siswa?.nama || '-'}
                         </td>
                         <td className="py-3.5 px-4 font-mono text-slate-600">
-                          {item.siswa?.nis} • NISN: {item.siswa?.nisn}
+                          {item?.siswa?.nis || '-'} • NISN: {item?.siswa?.nisn || '-'}
                         </td>
                         <td className="py-3.5 px-4">
                           <span className="px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-800 font-semibold">
-                            Kelas {item.kelas?.nama}
+                            Kelas {item?.kelas?.nama || '-'}
                           </span>
                         </td>
                         <td className="py-3.5 px-4">
                           <span
                             className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                              item.status === 'aktif'
+                              item?.status === 'aktif'
                                 ? 'bg-emerald-100 text-emerald-800'
-                                : item.status === 'naik_kelas'
+                                : item?.status === 'naik_kelas'
                                 ? 'bg-blue-100 text-blue-800'
                                 : 'bg-amber-100 text-amber-800'
                             }`}
                           >
-                            {item.status.replace('_', ' ')}
+                            {item?.status ? item.status.replace('_', ' ') : '-'}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4 text-slate-500">{item.catatan || '-'}</td>
+                        <td className="py-3.5 px-4 text-slate-500">{item?.catatan || '-'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -356,7 +383,7 @@ export function PenempatanKelasPage() {
             <div className="flex items-center gap-2 text-amber-800 font-medium">
               <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
               <span>
-                Terdapat <strong>{unassignedSiswa.length}</strong> siswa aktif yang belum ditempatkan ke kelas di tahun ajaran {activeTa?.tahun}.
+                Terdapat <strong>{unassignedSiswa.length}</strong> siswa aktif yang belum ditempatkan ke kelas di tahun ajaran {activeTa?.tahun || '-'}.
               </span>
             </div>
 
@@ -369,8 +396,8 @@ export function PenempatanKelasPage() {
                 >
                   <option value="">-- Pilih Kelas Tujuan --</option>
                   {kelasList.map((k) => (
-                    <option key={k.id} value={k.id}>
-                      Kelas {k.nama} (Tingkat {k.tingkat})
+                    <option key={k?.id} value={k?.id}>
+                      Kelas {k?.nama} (Tingkat {k?.tingkat})
                     </option>
                   ))}
                 </select>
@@ -404,10 +431,10 @@ export function PenempatanKelasPage() {
                       <th className="py-3.5 px-4 w-10">
                         <button
                           type="button"
-                          onClick={() => selectAll(unassignedSiswa.map((s) => s.id))}
-                          className="text-slate-400 hover:text-emerald-700"
+                          onClick={() => selectAll(unassignedSiswa.map((s) => s?.id))}
+                          className="text-slate-400 hover:text-emerald-700 cursor-pointer"
                         >
-                          {selectedSiswaIds.length === unassignedSiswa.length ? (
+                          {selectedSiswaIds.length > 0 && selectedSiswaIds.length === unassignedSiswa.length ? (
                             <CheckSquare className="w-4 h-4 text-emerald-700" />
                           ) : (
                             <Square className="w-4 h-4" />
@@ -423,27 +450,27 @@ export function PenempatanKelasPage() {
                   <tbody className="divide-y divide-slate-100 text-slate-700">
                     {unassignedSiswa.map((s) => (
                       <tr
-                        key={s.id}
-                        onClick={() => toggleSelectSiswa(s.id)}
+                        key={s?.id}
+                        onClick={() => toggleSelectSiswa(s?.id)}
                         className={`hover:bg-slate-50/70 transition-colors cursor-pointer ${
-                          selectedSiswaIds.includes(s.id) ? 'bg-emerald-50/50' : ''
+                          selectedSiswaIds.includes(s?.id) ? 'bg-emerald-50/50' : ''
                         }`}
                       >
                         <td className="py-3.5 px-4">
-                          {selectedSiswaIds.includes(s.id) ? (
+                          {selectedSiswaIds.includes(s?.id) ? (
                             <CheckSquare className="w-4 h-4 text-emerald-700" />
                           ) : (
                             <Square className="w-4 h-4 text-slate-300" />
                           )}
                         </td>
-                        <td className="py-3.5 px-4 font-bold text-slate-900">{s.nama}</td>
+                        <td className="py-3.5 px-4 font-bold text-slate-900">{s?.nama || '-'}</td>
                         <td className="py-3.5 px-4 font-mono text-slate-600">
-                          {s.nis} • NISN: {s.nisn}
+                          {s?.nis || '-'} • NISN: {s?.nisn || '-'}
                         </td>
                         <td className="py-3.5 px-4">
-                          {s.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan'}
+                          {s?.jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan'}
                         </td>
-                        <td className="py-3.5 px-4 text-slate-500">{s.telepon_ortu || '-'}</td>
+                        <td className="py-3.5 px-4 text-slate-500">{s?.telepon_ortu || '-'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -478,8 +505,8 @@ export function PenempatanKelasPage() {
                 >
                   <option value="">-- Pilih Rombel Asal --</option>
                   {kelasList.map((k) => (
-                    <option key={k.id} value={k.id}>
-                      Kelas {k.nama} (Tingkat {k.tingkat})
+                    <option key={k?.id} value={k?.id}>
+                      Kelas {k?.nama} (Tingkat {k?.tingkat})
                     </option>
                   ))}
                 </select>
@@ -510,8 +537,8 @@ export function PenempatanKelasPage() {
                 >
                   <option value="">-- Pilih Kelas Tujuan --</option>
                   {kelasList.map((k) => (
-                    <option key={k.id} value={k.id}>
-                      Kelas {k.nama} (Tingkat {k.tingkat})
+                    <option key={k?.id} value={k?.id}>
+                      Kelas {k?.nama} (Tingkat {k?.tingkat})
                     </option>
                   ))}
                 </select>
@@ -548,10 +575,10 @@ export function PenempatanKelasPage() {
                       <th className="py-3.5 px-4 w-10">
                         <button
                           type="button"
-                          onClick={() => selectAll(penempatanList.map((p) => p.siswa_id))}
-                          className="text-slate-400 hover:text-emerald-700"
+                          onClick={() => selectAll(penempatanList.map((p) => p?.siswa_id))}
+                          className="text-slate-400 hover:text-emerald-700 cursor-pointer"
                         >
-                          {selectedSiswaIds.length === penempatanList.length ? (
+                          {selectedSiswaIds.length > 0 && selectedSiswaIds.length === penempatanList.length ? (
                             <CheckSquare className="w-4 h-4 text-emerald-700" />
                           ) : (
                             <Square className="w-4 h-4" />
@@ -567,27 +594,29 @@ export function PenempatanKelasPage() {
                   <tbody className="divide-y divide-slate-100 text-slate-700">
                     {penempatanList.map((item) => (
                       <tr
-                        key={item.id}
-                        onClick={() => toggleSelectSiswa(item.siswa_id)}
+                        key={item?.id}
+                        onClick={() => toggleSelectSiswa(item?.siswa_id)}
                         className={`hover:bg-slate-50/70 transition-colors cursor-pointer ${
-                          selectedSiswaIds.includes(item.siswa_id) ? 'bg-emerald-50/50' : ''
+                          selectedSiswaIds.includes(item?.siswa_id) ? 'bg-emerald-50/50' : ''
                         }`}
                       >
                         <td className="py-3.5 px-4">
-                          {selectedSiswaIds.includes(item.siswa_id) ? (
+                          {selectedSiswaIds.includes(item?.siswa_id) ? (
                             <CheckSquare className="w-4 h-4 text-emerald-700" />
                           ) : (
                             <Square className="w-4 h-4 text-slate-300" />
                           )}
                         </td>
-                        <td className="py-3.5 px-4 font-bold text-slate-900">{item.siswa?.nama}</td>
+                        <td className="py-3.5 px-4 font-bold text-slate-900">{item?.siswa?.nama || '-'}</td>
                         <td className="py-3.5 px-4 font-mono text-slate-600">
-                          {item.siswa?.nis} • NISN: {item.siswa?.nisn}
+                          {item?.siswa?.nis || '-'} • NISN: {item?.siswa?.nisn || '-'}
                         </td>
                         <td className="py-3.5 px-4 font-semibold text-emerald-800">
-                          Kelas {item.kelas?.nama}
+                          Kelas {item?.kelas?.nama || '-'}
                         </td>
-                        <td className="py-3.5 px-4 capitalize">{item.status.replace('_', ' ')}</td>
+                        <td className="py-3.5 px-4 capitalize">
+                          {item?.status ? item.status.replace('_', ' ') : '-'}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -625,8 +654,8 @@ export function PenempatanKelasPage() {
                 >
                   <option value="">-- Pilih Kelas --</option>
                   {kelasList.map((k) => (
-                    <option key={k.id} value={k.id}>
-                      Kelas {k.nama} (Tingkat {k.tingkat})
+                    <option key={k?.id} value={k?.id}>
+                      Kelas {k?.nama} (Tingkat {k?.tingkat})
                     </option>
                   ))}
                 </select>
@@ -657,10 +686,10 @@ export function PenempatanKelasPage() {
                       <th className="py-3.5 px-4 w-10">
                         <button
                           type="button"
-                          onClick={() => selectAll(penempatanList.map((p) => p.siswa_id))}
-                          className="text-slate-400 hover:text-emerald-700"
+                          onClick={() => selectAll(penempatanList.map((p) => p?.siswa_id))}
+                          className="text-slate-400 hover:text-emerald-700 cursor-pointer"
                         >
-                          {selectedSiswaIds.length === penempatanList.length ? (
+                          {selectedSiswaIds.length > 0 && selectedSiswaIds.length === penempatanList.length ? (
                             <CheckSquare className="w-4 h-4 text-emerald-700" />
                           ) : (
                             <Square className="w-4 h-4" />
@@ -675,32 +704,32 @@ export function PenempatanKelasPage() {
                   <tbody className="divide-y divide-slate-100 text-slate-700">
                     {penempatanList.map((item) => (
                       <tr
-                        key={item.id}
-                        onClick={() => toggleSelectSiswa(item.siswa_id)}
+                        key={item?.id}
+                        onClick={() => toggleSelectSiswa(item?.siswa_id)}
                         className={`hover:bg-slate-50/70 transition-colors cursor-pointer ${
-                          selectedSiswaIds.includes(item.siswa_id) ? 'bg-emerald-50/50' : ''
+                          selectedSiswaIds.includes(item?.siswa_id) ? 'bg-emerald-50/50' : ''
                         }`}
                       >
                         <td className="py-3.5 px-4">
-                          {selectedSiswaIds.includes(item.siswa_id) ? (
+                          {selectedSiswaIds.includes(item?.siswa_id) ? (
                             <CheckSquare className="w-4 h-4 text-emerald-700" />
                           ) : (
                             <Square className="w-4 h-4 text-slate-300" />
                           )}
                         </td>
-                        <td className="py-3.5 px-4 font-bold text-slate-900">{item.siswa?.nama}</td>
+                        <td className="py-3.5 px-4 font-bold text-slate-900">{item?.siswa?.nama || '-'}</td>
                         <td className="py-3.5 px-4 font-mono text-slate-600">
-                          {item.siswa?.nis} • NISN: {item.siswa?.nisn}
+                          {item?.siswa?.nis || '-'} • NISN: {item?.siswa?.nisn || '-'}
                         </td>
                         <td className="py-3.5 px-4">
                           <span
                             className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                              item.siswa?.status === 'lulus'
+                              item?.siswa?.status === 'lulus'
                                 ? 'bg-blue-100 text-blue-800'
                                 : 'bg-emerald-100 text-emerald-800'
                             }`}
                           >
-                            {item.siswa?.status}
+                            {item?.siswa?.status || '-'}
                           </span>
                         </td>
                       </tr>

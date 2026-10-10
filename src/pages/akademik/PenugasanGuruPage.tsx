@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   CheckCircle2,
   UserCheck,
+  AlertCircle,
 } from 'lucide-react';
 
 export function PenugasanGuruPage() {
@@ -50,53 +51,64 @@ export function PenugasanGuruPage() {
   const [deleteId, setDeleteId] = useState<number | null>(null);
 
   // Queries
-  const { data: taList = [] } = useQuery({
+  const { data: rawTaList = [], isLoading: isLoadingTa } = useQuery({
     queryKey: ['tahun-ajaran'],
     queryFn: async () => {
       const res = await api.get<TahunAjaran[]>('/api/tahun-ajaran');
-      return res.data || [];
+      return Array.isArray(res.data) ? res.data : [];
     },
   });
 
-  const activeTa = taList.find((t) => t.is_active) || taList[0];
+  const taList = Array.isArray(rawTaList) ? rawTaList : [];
+  const activeTa = taList.find((t) => t?.is_active) || taList[0];
 
-  const { data: guruList = [] } = useQuery({
+  const { data: rawGuruList = [] } = useQuery({
     queryKey: ['guru-simple'],
     queryFn: async () => {
       const res = await api.get<any[]>('/api/guru/simple');
-      return res.data || [];
+      return Array.isArray(res.data) ? res.data : [];
     },
   });
 
-  const { data: kelasList = [] } = useQuery({
+  const guruList = Array.isArray(rawGuruList) ? rawGuruList : [];
+
+  const { data: rawKelasList = [] } = useQuery({
     queryKey: ['kelas-simple'],
     queryFn: async () => {
       const res = await api.get<Kelas[]>('/api/kelas/simple');
-      return res.data || [];
+      return Array.isArray(res.data) ? res.data : [];
     },
   });
 
-  const { data: mapelList = [] } = useQuery({
+  const kelasList = Array.isArray(rawKelasList) ? rawKelasList : [];
+
+  const { data: rawMapelList = [] } = useQuery({
     queryKey: ['mapel-list'],
     queryFn: async () => {
       const res = await api.get<any>('/api/mapel?limit=100');
-      return res.data?.data || [];
+      const items = res.data?.data || res.data || [];
+      return Array.isArray(items) ? items : [];
     },
   });
 
-  const { data: pengajaranList = [], isLoading } = useQuery({
+  const mapelList = Array.isArray(rawMapelList) ? rawMapelList : [];
+
+  const { data: rawPengajaranList = [], isLoading } = useQuery({
     queryKey: ['pengajaran', filterGuruId, filterKelasId, activeTa?.id],
     queryFn: async () => {
+      if (!activeTa) return [];
       const params = new URLSearchParams();
       if (filterGuruId) params.append('guru_id', filterGuruId);
       if (filterKelasId) params.append('kelas_id', filterKelasId);
-      if (activeTa) params.append('tahun_ajaran_id', String(activeTa.id));
+      params.append('tahun_ajaran_id', String(activeTa.id));
 
       const res = await api.get<PengajaranGuru[]>(`/api/akademik/pengajaran?${params.toString()}`);
-      return res.data || [];
+      return Array.isArray(res.data) ? res.data : [];
     },
     enabled: Boolean(activeTa),
   });
+
+  const pengajaranList = Array.isArray(rawPengajaranList) ? rawPengajaranList : [];
 
   // Mutations
   const createMutation = useMutation({
@@ -157,16 +169,34 @@ export function PenugasanGuruPage() {
     setWaliMutation.mutate(waliData);
   };
 
+  if (isLoadingTa) {
+    return (
+      <div className="bg-white p-8 rounded-2xl border border-slate-200/80 shadow-xs">
+        <TableSkeleton rows={6} cols={5} />
+      </div>
+    );
+  }
+
+  if (!activeTa) {
+    return (
+      <EmptyState
+        title="Belum Ada Tahun Ajaran Aktif"
+        description="Belum ada tahun ajaran aktif, atur di menu Tahun Ajaran."
+        icon={<AlertCircle className="w-8 h-8 text-amber-600" />}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-800">
-            Penugasan Guru & Penetapan Wali Kelas
+            Penugasan Mengajar & Penetapan Wali Kelas
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Penugasan pendidik madrasah mengampu mata pelajaran di setiap rombel serta penetapan wali kelas tahun ajaran {activeTa?.tahun}.
+            Penugasan pendidik madrasah mengampu mata pelajaran di setiap rombel serta penetapan wali kelas tahun ajaran {activeTa?.tahun || '-'}.
           </p>
         </div>
 
@@ -174,14 +204,15 @@ export function PenugasanGuruPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setWaliModalOpen(true)}
-              className="inline-flex items-center gap-2 px-3.5 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+              className="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
             >
-              <UserCheck className="w-4 h-4 text-amber-600" />
+              <UserCheck className="w-4 h-4 text-blue-600" />
               Tetapkan Wali Kelas
             </button>
+
             <button
               onClick={() => setModalOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+              className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
             >
               <Plus className="w-4 h-4" />
               Tambah Penugasan Ajar
@@ -191,9 +222,9 @@ export function PenugasanGuruPage() {
       </div>
 
       {/* Filter Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row gap-3 items-center justify-between">
+      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-          <div className="w-full sm:w-64">
+          <div className="w-full sm:w-60">
             <select
               value={filterGuruId}
               onChange={(e) => setFilterGuruId(e.target.value)}
@@ -201,8 +232,8 @@ export function PenugasanGuruPage() {
             >
               <option value="">Semua Guru Pengampu</option>
               {guruList.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.nama}
+                <option key={g?.id} value={g?.id}>
+                  {g?.nama}
                 </option>
               ))}
             </select>
@@ -216,8 +247,8 @@ export function PenugasanGuruPage() {
             >
               <option value="">Semua Kelas</option>
               {kelasList.map((k) => (
-                <option key={k.id} value={k.id}>
-                  Kelas {k.nama} (Tingkat {k.tingkat})
+                <option key={k?.id} value={k?.id}>
+                  Kelas {k?.nama} (Tingkat {k?.tingkat})
                 </option>
               ))}
             </select>
@@ -256,30 +287,30 @@ export function PenugasanGuruPage() {
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
                 {pengajaranList.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
+                  <tr key={item?.id} className="hover:bg-slate-50/70 transition-colors">
                     <td className="py-3.5 px-4">
-                      <div className="font-bold text-slate-900">{item.guru?.nama}</div>
-                      <div className="text-[11px] text-slate-400">{item.guru?.jabatan}</div>
+                      <div className="font-bold text-slate-900">{item?.guru?.nama || '-'}</div>
+                      <div className="text-[11px] text-slate-400">{item?.guru?.jabatan || '-'}</div>
                     </td>
                     <td className="py-3.5 px-4">
                       <div className="font-semibold text-slate-800 flex items-center gap-1.5">
-                        <BookOpen className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>{item.mapel?.nama}</span>
+                        <BookOpen className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>{item?.mapel?.nama || '-'}</span>
                       </div>
-                      <div className="text-[10px] text-slate-400 font-mono">{item.mapel?.kode}</div>
+                      <div className="text-[10px] text-slate-400 font-mono">{item?.mapel?.kode || '-'}</div>
                     </td>
                     <td className="py-3.5 px-4">
                       <span className="px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-800 font-semibold">
-                        Kelas {item.kelas?.nama}
+                        Kelas {item?.kelas?.nama || '-'}
                       </span>
                     </td>
                     <td className="py-3.5 px-4 text-slate-600 font-semibold">
-                      {item.beban_jp} JP / minggu
+                      {item?.beban_jp ?? 0} JP / minggu
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       {canEdit && (
                         <button
-                          onClick={() => setDeleteId(item.id)}
+                          onClick={() => setDeleteId(item?.id)}
                           className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                           title="Hapus Penugasan"
                         >
@@ -299,94 +330,98 @@ export function PenugasanGuruPage() {
       <Modal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
-        title="Tambah Penugasan Ajar Guru"
+        title="Tambah Penugasan Guru Mengajar"
         maxWidth="md"
       >
         <form onSubmit={handleSubmitPengajaran} className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Pilih Guru Pendidik
+              Guru Pendidik
             </label>
             <select
               value={formData.guru_id}
-              onChange={(e) => setFormData({ ...formData, guru_id: e.target.value })}
-              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:outline-emerald-600 bg-white"
+              onChange={(e) => setFormData((p) => ({ ...p, guru_id: e.target.value }))}
               required
+              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-emerald-600 bg-white"
             >
               <option value="">-- Pilih Guru --</option>
               {guruList.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.nama} ({g.jabatan})
+                <option key={g?.id} value={g?.id}>
+                  {g?.nama} ({g?.jabatan})
                 </option>
               ))}
             </select>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Mata Pelajaran yang Diampu
-            </label>
-            <select
-              value={formData.mapel_id}
-              onChange={(e) => setFormData({ ...formData, mapel_id: e.target.value })}
-              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:outline-emerald-600 bg-white"
-              required
-            >
-              <option value="">-- Pilih Mata Pelajaran --</option>
-              {mapelList.map((m: any) => (
-                <option key={m.id} value={m.id}>
-                  {m.nama} ({m.kode} - {m.kelompok})
-                </option>
-              ))}
-            </select>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Mata Pelajaran
+              </label>
+              <select
+                value={formData.mapel_id}
+                onChange={(e) => setFormData((p) => ({ ...p, mapel_id: e.target.value }))}
+                required
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-emerald-600 bg-white"
+              >
+                <option value="">-- Pilih Mapel --</option>
+                {mapelList.map((m: any) => (
+                  <option key={m?.id} value={m?.id}>
+                    {m?.nama} ({m?.kode})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Kelas / Rombel
+              </label>
+              <select
+                value={formData.kelas_id}
+                onChange={(e) => setFormData((p) => ({ ...p, kelas_id: e.target.value }))}
+                required
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-emerald-600 bg-white"
+              >
+                <option value="">-- Pilih Kelas --</option>
+                {kelasList.map((k) => (
+                  <option key={k?.id} value={k?.id}>
+                    Kelas {k?.nama}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Kelas / Rombel Tujuan
-            </label>
-            <select
-              value={formData.kelas_id}
-              onChange={(e) => setFormData({ ...formData, kelas_id: e.target.value })}
-              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:outline-emerald-600 bg-white"
-              required
-            >
-              <option value="">-- Pilih Kelas --</option>
-              {kelasList.map((k) => (
-                <option key={k.id} value={k.id}>
-                  Kelas {k.nama} (Tingkat {k.tingkat})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Beban Jam (JP / Minggu)
+              Beban Jam Pelajaran (JP / Minggu)
             </label>
             <input
               type="number"
               min={1}
-              max={10}
+              max={40}
               value={formData.beban_jp}
-              onChange={(e) => setFormData({ ...formData, beban_jp: Number(e.target.value) })}
-              className="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-xl focus:outline-emerald-600"
+              onChange={(e) =>
+                setFormData((p) => ({ ...p, beban_jp: Number(e.target.value) || 1 }))
+              }
               required
+              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-emerald-600"
             />
           </div>
 
-          <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-100">
+          <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
               onClick={() => setModalOpen(false)}
-              className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-xl"
+              className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
             >
               Batal
             </button>
             <button
               type="submit"
               disabled={createMutation.isPending}
-              className="px-4 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 disabled:bg-emerald-400 rounded-xl transition-colors cursor-pointer"
+              className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-300 text-white rounded-xl text-xs font-semibold shadow-xs cursor-pointer"
             >
               {createMutation.isPending ? 'Menyimpan...' : 'Simpan Penugasan'}
             </button>
@@ -398,29 +433,35 @@ export function PenugasanGuruPage() {
       <Modal
         isOpen={waliModalOpen}
         onClose={() => setWaliModalOpen(false)}
-        title="Penetapan Wali Kelas Rombel"
+        title="Tetapkan Wali Kelas Rombel"
         maxWidth="md"
       >
         <form onSubmit={handleSubmitWali} className="space-y-4">
+          <p className="text-xs text-slate-500">
+            Wali kelas bertanggung jawab penuh atas catatan pembinaan, pengisian rapor sikap spiritual & sosial, dan pengesahan rapor.
+          </p>
+
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Pilih Rombel / Kelas</label>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Pilih Rombongan Belajar (Kelas)
+            </label>
             <select
               value={waliData.kelas_id}
               onChange={(e) => {
                 const kId = e.target.value;
-                const matchKelas = kelasList.find((item) => String(item.id) === kId);
+                const found = kelasList.find((k) => String(k?.id) === kId);
                 setWaliData({
                   kelas_id: kId,
-                  guru_id: matchKelas?.wali_kelas_id ? String(matchKelas.wali_kelas_id) : '',
+                  guru_id: found?.wali_kelas_id ? String(found.wali_kelas_id) : '',
                 });
               }}
-              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:outline-emerald-600 bg-white"
               required
+              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-emerald-600 bg-white"
             >
               <option value="">-- Pilih Kelas --</option>
               {kelasList.map((k) => (
-                <option key={k.id} value={k.id}>
-                  Kelas {k.nama} (Tingkat {k.tingkat})
+                <option key={k?.id} value={k?.id}>
+                  Kelas {k?.nama} (Tingkat {k?.tingkat})
                 </option>
               ))}
             </select>
@@ -428,34 +469,34 @@ export function PenugasanGuruPage() {
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Guru Wali Kelas
+              Pilih Guru sebagai Wali Kelas
             </label>
             <select
               value={waliData.guru_id}
-              onChange={(e) => setWaliData({ ...waliData, guru_id: e.target.value })}
-              className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:outline-emerald-600 bg-white"
+              onChange={(e) => setWaliData((p) => ({ ...p, guru_id: e.target.value }))}
+              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-emerald-600 bg-white"
             >
-              <option value="">-- Kosongkan / Belum Ditentukan --</option>
+              <option value="">-- Kosongkan / Belum Ditetapkan --</option>
               {guruList.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.nama} ({g.jabatan})
+                <option key={g?.id} value={g?.id}>
+                  {g?.nama} ({g?.jabatan})
                 </option>
               ))}
             </select>
           </div>
 
-          <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-100">
+          <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
               onClick={() => setWaliModalOpen(false)}
-              className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-xl"
+              className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
             >
               Batal
             </button>
             <button
               type="submit"
               disabled={setWaliMutation.isPending}
-              className="px-4 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 disabled:bg-emerald-400 rounded-xl transition-colors cursor-pointer"
+              className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-300 text-white rounded-xl text-xs font-semibold shadow-xs cursor-pointer"
             >
               {setWaliMutation.isPending ? 'Menyimpan...' : 'Simpan Wali Kelas'}
             </button>
@@ -463,14 +504,17 @@ export function PenugasanGuruPage() {
         </form>
       </Modal>
 
-      {/* Delete Confirmation */}
+      {/* Confirm Delete Penugasan */}
       <ConfirmDialog
         isOpen={deleteId !== null}
         onClose={() => setDeleteId(null)}
-        onConfirm={() => deleteId && deleteMutation.mutate(deleteId)}
-        title="Hapus Penugasan Guru"
-        message="Apakah Anda yakin ingin menghapus penugasan mengajar ini?"
-        isLoading={deleteMutation.isPending}
+        onConfirm={() => {
+          if (deleteId) deleteMutation.mutate(deleteId);
+        }}
+        title="Hapus Penugasan Mengajar?"
+        message="Penugasan guru untuk mata pelajaran dan rombel ini akan dihapus dari jadwal."
+        confirmText="Hapus"
+        isDestructive
       />
     </div>
   );

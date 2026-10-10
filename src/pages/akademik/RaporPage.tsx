@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/api';
@@ -7,32 +7,24 @@ import { TableSkeleton } from '../../components/ui/Skeleton';
 import { EmptyState } from '../../components/ui/EmptyState';
 import {
   Printer,
-  GraduationCap,
-  Download,
   School,
-  CheckCircle,
-  FileText,
-  User,
-  Calendar,
+  AlertCircle,
 } from 'lucide-react';
 
 export function RaporPage() {
   const { user } = useAuth();
 
-  // Filters
-  const [selectedKelasId, setSelectedKelasId] = useState<string>('1');
-  const [selectedSiswaId, setSelectedSiswaId] = useState<string>('1');
-
   // Queries
-  const { data: taList = [] } = useQuery({
+  const { data: rawTaList = [], isLoading: isLoadingTa } = useQuery({
     queryKey: ['tahun-ajaran'],
     queryFn: async () => {
       const res = await api.get<TahunAjaran[]>('/api/tahun-ajaran');
-      return res.data || [];
+      return Array.isArray(res.data) ? res.data : [];
     },
   });
 
-  const activeTa = taList.find((t) => t.is_active) || taList[0];
+  const taList = Array.isArray(rawTaList) ? rawTaList : [];
+  const activeTa = taList.find((t) => t?.is_active) || taList[0];
 
   const { data: guruScope } = useQuery({
     queryKey: ['guru-scope'],
@@ -42,35 +34,59 @@ export function RaporPage() {
     },
   });
 
-  const { data: rawKelasList = [] } = useQuery({
+  const { data: rawKelasList = [], isLoading: isLoadingKelas } = useQuery({
     queryKey: ['kelas-simple'],
     queryFn: async () => {
       const res = await api.get<Kelas[]>('/api/kelas/simple');
-      return res.data || [];
+      return Array.isArray(res.data) ? res.data : [];
     },
   });
 
+  const validRawKelas = Array.isArray(rawKelasList) ? rawKelasList : [];
   const kelasList = guruScope?.isGuru
-    ? rawKelasList.filter((k) => guruScope.allowedKelasIds?.includes(k.id))
-    : rawKelasList;
+    ? validRawKelas.filter((k) => guruScope.allowedKelasIds?.includes(k?.id))
+    : validRawKelas;
+
+  // Filters
+  const [selectedKelasId, setSelectedKelasId] = useState<string>('');
+  const [selectedSiswaId, setSelectedSiswaId] = useState<string>('');
+
+  // Auto-select first class when kelasList loads
+  useEffect(() => {
+    if (kelasList.length > 0 && (!selectedKelasId || !kelasList.some((k) => String(k?.id) === selectedKelasId))) {
+      setSelectedKelasId(String(kelasList[0]?.id));
+    }
+  }, [kelasList, selectedKelasId]);
 
   // Siswa in this class
-  const { data: siswaList = [] } = useQuery({
+  const { data: rawSiswaList = [], isLoading: isLoadingSiswa } = useQuery({
     queryKey: ['siswa-in-kelas', selectedKelasId],
     queryFn: async () => {
       if (!selectedKelasId) return [];
       const res = await api.get<any>(`/api/siswa?kelas_id=${selectedKelasId}&limit=100`);
-      return res.data?.data || [];
+      const items = res.data?.data || res.data || [];
+      return Array.isArray(items) ? items : [];
     },
     enabled: Boolean(selectedKelasId),
   });
 
+  const siswaList = Array.isArray(rawSiswaList) ? rawSiswaList : [];
+
+  // Auto-select first student when siswaList loads
+  useEffect(() => {
+    if (siswaList.length > 0 && (!selectedSiswaId || !siswaList.some((s) => String(s?.id) === selectedSiswaId))) {
+      setSelectedSiswaId(String(siswaList[0]?.id));
+    } else if (siswaList.length === 0) {
+      setSelectedSiswaId('');
+    }
+  }, [siswaList, selectedSiswaId]);
+
   // Query Rapor Lengkap
-  const { data: raporData, isLoading: isLoadingRapor } = useQuery({
+  const { data: rawRaporData, isLoading: isLoadingRapor } = useQuery({
     queryKey: ['rapor-lengkap', selectedSiswaId, activeTa?.id],
     queryFn: async () => {
       if (!selectedSiswaId) return null;
-      const res = await api.get<RaporData>(
+      const res = await api.get<any>(
         `/api/akademik/rapor/${selectedSiswaId}?tahun_ajaran_id=${activeTa?.id}`
       );
       return res.data || null;
@@ -78,9 +94,53 @@ export function RaporPage() {
     enabled: Boolean(selectedSiswaId && activeTa),
   });
 
+  const raporData = rawRaporData || null;
+
   const handlePrint = () => {
     window.print();
   };
+
+  if (isLoadingTa) {
+    return (
+      <div className="bg-white p-8 rounded-2xl border border-slate-200/80 shadow-xs">
+        <TableSkeleton rows={6} cols={4} />
+      </div>
+    );
+  }
+
+  if (!activeTa) {
+    return (
+      <EmptyState
+        title="Belum Ada Tahun Ajaran Aktif"
+        description="Belum ada tahun ajaran aktif, atur di menu Tahun Ajaran."
+        icon={<AlertCircle className="w-8 h-8 text-amber-600" />}
+      />
+    );
+  }
+
+  // Normalized safe properties from raporData (supporting both camelCase and snake_case)
+  const safeTa = raporData?.tahunAjaran || raporData?.tahun_ajaran || activeTa;
+  const safeMadrasah = raporData?.madrasah || { nama: 'Madrasah' };
+  const safeSiswa = raporData?.siswa;
+  const safeKelas = raporData?.kelas;
+  const safeWaliKelas = raporData?.waliKelas || raporData?.wali_kelas;
+  const safeCatatan = raporData?.catatanRapor || raporData?.catatan || {
+    sikap_spiritual: 'Baik',
+    deskripsi_spiritual: 'Menunjukkan ketaatan beribadah dan akhlak terpuji.',
+    sikap_sosial: 'Baik',
+    deskripsi_sosial: 'Menunjukkan kepedulian sosial, sopan santun, dan kerja sama yang baik.',
+    juz_hafalan: 'Juz 30',
+    surah_terakhir: 'An-Naba',
+    predikat_tahfidz: 'Jayyid',
+    catatan_wali_kelas: 'Tingkatkan terus prestasi belajar dan kedisiplinan.',
+    status_akhir: 'Belum Ditentukan',
+  };
+  const safeNilaiList: any[] = Array.isArray(raporData?.nilaiList)
+    ? raporData.nilaiList
+    : Array.isArray(raporData?.nilai)
+    ? raporData.nilai
+    : [];
+  const safeAbsensi = raporData?.rekapAbsensi || raporData?.absensi || { hadir: 0, izin: 0, sakit: 0, alpa: 0 };
 
   return (
     <div className="space-y-6">
@@ -114,16 +174,18 @@ export function RaporPage() {
             </span>
             <select
               value={selectedKelasId}
-              onChange={(e) => {
-                setSelectedKelasId(e.target.value);
-              }}
+              onChange={(e) => setSelectedKelasId(e.target.value)}
               className="px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-emerald-600 bg-white font-semibold text-emerald-800"
             >
-              {kelasList.map((k) => (
-                <option key={k.id} value={k.id}>
-                  Kelas {k.nama} (Tingkat {k.tingkat})
-                </option>
-              ))}
+              {kelasList.length === 0 ? (
+                <option value="">-- Belum Ada Kelas --</option>
+              ) : (
+                kelasList.map((k) => (
+                  <option key={k?.id} value={k?.id}>
+                    Kelas {k?.nama} (Tingkat {k?.tingkat})
+                  </option>
+                ))
+              )}
             </select>
           </div>
 
@@ -136,11 +198,15 @@ export function RaporPage() {
               onChange={(e) => setSelectedSiswaId(e.target.value)}
               className="px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-emerald-600 bg-white font-semibold text-slate-800 max-w-xs"
             >
-              {siswaList.map((s: Siswa) => (
-                <option key={s.id} value={s.id}>
-                  {s.nama} ({s.nis})
-                </option>
-              ))}
+              {siswaList.length === 0 ? (
+                <option value="">-- Belum Ada Siswa --</option>
+              ) : (
+                siswaList.map((s: Siswa) => (
+                  <option key={s?.id} value={s?.id}>
+                    {s?.nama} ({s?.nis || '-'})
+                  </option>
+                ))
+              )}
             </select>
           </div>
         </div>
@@ -164,9 +230,9 @@ export function RaporPage() {
           <div className="border-b-4 border-double border-slate-900 pb-4 mb-6">
             <div className="flex items-center justify-between gap-4">
               <div className="w-20 h-20 flex items-center justify-center border-2 border-emerald-800 rounded-full bg-emerald-50 shrink-0">
-                {raporData.madrasah.logo_url ? (
+                {safeMadrasah?.logo_url ? (
                   <img
-                    src={raporData.madrasah.logo_url}
+                    src={safeMadrasah.logo_url}
                     alt="Logo"
                     className="w-16 h-16 object-contain"
                   />
@@ -180,13 +246,13 @@ export function RaporPage() {
                   KEMENTERIAN AGAMA REPUBLIK INDONESIA
                 </p>
                 <h1 className="text-lg sm:text-xl font-extrabold uppercase tracking-tight text-slate-900">
-                  {raporData.madrasah.nama}
+                  {safeMadrasah?.nama || 'Madrasah'}
                 </h1>
                 <p className="text-xs text-slate-600 mt-0.5">
-                  NSM: {raporData.madrasah.nsm || '-'} • NPSN: {raporData.madrasah.npsn || '-'}
+                  NSM: {safeMadrasah?.nsm || '-'} • NPSN: {safeMadrasah?.npsn || '-'}
                 </p>
                 <p className="text-[11px] text-slate-500 mt-0.5">
-                  {raporData.madrasah.alamat || 'Alamat Madrasah'} • Telp: {raporData.madrasah.telepon || '-'} • Email: {raporData.madrasah.email || '-'}
+                  {safeMadrasah?.alamat || 'Alamat Madrasah'} • Telp: {safeMadrasah?.telepon || '-'} • Email: {safeMadrasah?.email || '-'}
                 </p>
               </div>
 
@@ -200,7 +266,7 @@ export function RaporPage() {
               LAPORAN HASIL CAPAIAN KOMPETENSI PESERTA DIDIK
             </h2>
             <p className="text-xs text-slate-600 mt-1">
-              Tahun Ajaran {raporData.tahunAjaran.tahun} — Semester {raporData.tahunAjaran.semester}
+              Tahun Ajaran {safeTa?.tahun || '-'} — Semester {safeTa?.semester || '-'}
             </p>
           </div>
 
@@ -208,29 +274,29 @@ export function RaporPage() {
           <div className="grid grid-cols-2 gap-x-8 gap-y-1.5 text-xs font-sans mb-6 pb-4 border-b border-slate-200">
             <div className="flex">
               <span className="w-32 text-slate-600">Nama Peserta Didik</span>
-              <span className="font-bold text-slate-900">: {raporData.siswa.nama}</span>
+              <span className="font-bold text-slate-900">: {safeSiswa?.nama || '-'}</span>
             </div>
             <div className="flex">
               <span className="w-32 text-slate-600">Kelas / Rombel</span>
-              <span className="font-bold text-slate-900">: Kelas {raporData.kelas?.nama}</span>
+              <span className="font-bold text-slate-900">: Kelas {safeKelas?.nama || '-'}</span>
             </div>
             <div className="flex">
               <span className="w-32 text-slate-600">NIS / NISN</span>
               <span className="font-mono text-slate-900">
-                : {raporData.siswa.nis} / {raporData.siswa.nisn}
+                : {safeSiswa?.nis || '-'} / {safeSiswa?.nisn || '-'}
               </span>
             </div>
             <div className="flex">
               <span className="w-32 text-slate-600">Semester</span>
-              <span className="text-slate-900">: {raporData.tahunAjaran.semester}</span>
+              <span className="text-slate-900">: {safeTa?.semester || '-'}</span>
             </div>
             <div className="flex">
               <span className="w-32 text-slate-600">Nama Wali Kelas</span>
-              <span className="text-slate-900">: {raporData.waliKelas?.nama || '-'}</span>
+              <span className="text-slate-900">: {safeWaliKelas?.nama || '-'}</span>
             </div>
             <div className="flex">
               <span className="w-32 text-slate-600">Tahun Ajaran</span>
-              <span className="text-slate-900">: {raporData.tahunAjaran.tahun}</span>
+              <span className="text-slate-900">: {safeTa?.tahun || '-'}</span>
             </div>
           </div>
 
@@ -253,10 +319,10 @@ export function RaporPage() {
                     Sikap Spiritual
                   </td>
                   <td className="py-2 px-3 font-bold border-r border-slate-300 text-center text-emerald-800">
-                    {raporData.catatanRapor.sikap_spiritual}
+                    {safeCatatan?.sikap_spiritual || 'Baik'}
                   </td>
                   <td className="py-2 px-3 text-slate-700 leading-snug">
-                    {raporData.catatanRapor.deskripsi_spiritual ||
+                    {safeCatatan?.deskripsi_spiritual ||
                       'Selalu taat menjalankan ibadah shalat dan berdoa secara tertib.'}
                   </td>
                 </tr>
@@ -265,10 +331,10 @@ export function RaporPage() {
                     Sikap Sosial
                   </td>
                   <td className="py-2 px-3 font-bold border-r border-slate-300 text-center text-emerald-800">
-                    {raporData.catatanRapor.sikap_sosial}
+                    {safeCatatan?.sikap_sosial || 'Baik'}
                   </td>
                   <td className="py-2 px-3 text-slate-700 leading-snug">
-                    {raporData.catatanRapor.deskripsi_sosial ||
+                    {safeCatatan?.deskripsi_sosial ||
                       'Menunjukkan sikap santun, jujur, peduli sesama, dan tanggung jawab yang sangat baik.'}
                   </td>
                 </tr>
@@ -293,41 +359,59 @@ export function RaporPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {raporData.nilaiList.map((item, idx) => (
-                  <tr key={item.mapel.id}>
-                    <td className="py-1.5 px-2 border-r border-slate-300 text-center font-mono">
-                      {idx + 1}
-                    </td>
-                    <td className="py-1.5 px-3 border-r border-slate-300 font-semibold text-slate-900">
-                      {item.mapel.nama}
-                      <span className="text-[10px] text-slate-400 font-normal ml-2">
-                        ({item.mapel.kelompok})
-                      </span>
-                    </td>
-                    <td className="py-1.5 px-2 border-r border-slate-300 text-center font-mono">
-                      {item.mapel.kkm}
-                    </td>
-                    <td className="py-1.5 px-2 border-r border-slate-300 text-center font-extrabold text-slate-900 font-mono">
-                      {item.nilai_akhir}
-                    </td>
-                    <td className="py-1.5 px-2 border-r border-slate-300 text-center font-bold">
-                      <span
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                          item.predikat === 'A'
-                            ? 'bg-emerald-100 text-emerald-900'
-                            : item.predikat === 'B'
-                            ? 'bg-blue-100 text-blue-900'
-                            : 'bg-amber-100 text-amber-900'
-                        }`}
-                      >
-                        {item.predikat}
-                      </span>
-                    </td>
-                    <td className="py-1.5 px-3 text-[11px] text-slate-600">
-                      {item.catatan || (item.nilai_akhir >= item.mapel.kkm ? 'Tuntas' : 'Remedial')}
+                {safeNilaiList.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-3 text-center text-slate-400">
+                      Belum ada nilai yang diinputkan untuk siswa ini.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  safeNilaiList.map((item, idx) => {
+                    const mapelNama = item?.mapel?.nama || item?.nama || '-';
+                    const mapelKelompok = item?.mapel?.kelompok || item?.kelompok;
+                    const mapelKkm = item?.mapel?.kkm ?? item?.kkm ?? 75;
+                    const nilaiAkhir = Number(item?.nilai_akhir) || 0;
+                    const predikat = item?.predikat || 'C';
+
+                    return (
+                      <tr key={item?.mapel?.id || item?.mapel_id || idx}>
+                        <td className="py-1.5 px-2 border-r border-slate-300 text-center font-mono">
+                          {idx + 1}
+                        </td>
+                        <td className="py-1.5 px-3 border-r border-slate-300 font-semibold text-slate-900">
+                          {mapelNama}
+                          {mapelKelompok && (
+                            <span className="text-[10px] text-slate-400 font-normal ml-2">
+                              ({mapelKelompok})
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-1.5 px-2 border-r border-slate-300 text-center font-mono">
+                          {mapelKkm}
+                        </td>
+                        <td className="py-1.5 px-2 border-r border-slate-300 text-center font-extrabold text-slate-900 font-mono">
+                          {nilaiAkhir}
+                        </td>
+                        <td className="py-1.5 px-2 border-r border-slate-300 text-center font-bold">
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                              predikat === 'A'
+                                ? 'bg-emerald-100 text-emerald-900'
+                                : predikat === 'B'
+                                ? 'bg-blue-100 text-blue-900'
+                                : 'bg-amber-100 text-amber-900'
+                            }`}
+                          >
+                            {predikat}
+                          </span>
+                        </td>
+                        <td className="py-1.5 px-3 text-[11px] text-slate-600">
+                          {item?.catatan || (nilaiAkhir >= mapelKkm ? 'Tuntas' : 'Remedial')}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
@@ -348,13 +432,13 @@ export function RaporPage() {
               <tbody>
                 <tr>
                   <td className="py-2 px-3 border-r border-slate-300 text-center font-semibold">
-                    {raporData.catatanRapor.juz_hafalan || 'Juz 30'}
+                    {safeCatatan?.juz_hafalan || 'Juz 30'}
                   </td>
                   <td className="py-2 px-3 border-r border-slate-300 text-center">
-                    {raporData.catatanRapor.surah_terakhir || 'An-Naba s.d. An-Nas'}
+                    {safeCatatan?.surah_terakhir || 'An-Naba s.d. An-Nas'}
                   </td>
                   <td className="py-2 px-3 text-center font-bold text-emerald-800">
-                    {raporData.catatanRapor.predikat_tahfidz || 'Jayyid'}
+                    {safeCatatan?.predikat_tahfidz || 'Jayyid'}
                   </td>
                 </tr>
               </tbody>
@@ -372,22 +456,22 @@ export function RaporPage() {
                 <div className="flex justify-between py-0.5">
                   <span className="text-slate-600">Hadir (H)</span>
                   <span className="font-bold text-emerald-700">
-                    {raporData.rekapAbsensi.hadir} Hari
+                    {safeAbsensi?.hadir ?? 0} Hari
                   </span>
                 </div>
                 <div className="flex justify-between py-0.5">
                   <span className="text-slate-600">Izin (I)</span>
-                  <span className="font-bold text-blue-700">{raporData.rekapAbsensi.izin} Hari</span>
+                  <span className="font-bold text-blue-700">{safeAbsensi?.izin ?? 0} Hari</span>
                 </div>
                 <div className="flex justify-between py-0.5">
                   <span className="text-slate-600">Sakit (S)</span>
                   <span className="font-bold text-amber-700">
-                    {raporData.rekapAbsensi.sakit} Hari
+                    {safeAbsensi?.sakit ?? 0} Hari
                   </span>
                 </div>
                 <div className="flex justify-between py-0.5">
                   <span className="text-slate-600">Tanpa Keterangan (A)</span>
-                  <span className="font-bold text-rose-700">{raporData.rekapAbsensi.alpa} Hari</span>
+                  <span className="font-bold text-rose-700">{safeAbsensi?.alpa ?? 0} Hari</span>
                 </div>
               </div>
             </div>
@@ -399,16 +483,16 @@ export function RaporPage() {
                   E. Catatan Wali Kelas
                 </h4>
                 <p className="text-xs text-slate-700 italic leading-relaxed">
-                  "{raporData.catatanRapor.catatan_wali_kelas ||
+                  "{safeCatatan?.catatan_wali_kelas ||
                     'Pertahankan prestasimu dan terus bersemangat dalam menuntut ilmu.'}"
                 </p>
               </div>
 
-              {raporData.catatanRapor.status_akhir !== 'Belum Ditentukan' && (
+              {safeCatatan?.status_akhir && safeCatatan.status_akhir !== 'Belum Ditentukan' && (
                 <div className="pt-2 border-t border-slate-200 text-xs font-bold text-emerald-800">
-                  Keputusan: {raporData.catatanRapor.status_akhir}{' '}
-                  {raporData.catatanRapor.naik_ke_kelas &&
-                    `ke Kelas ${raporData.catatanRapor.naik_ke_kelas}`}
+                  Keputusan: {safeCatatan.status_akhir}{' '}
+                  {safeCatatan.naik_ke_kelas &&
+                    `ke Kelas ${safeCatatan.naik_ke_kelas}`}
                 </div>
               )}
             </div>
@@ -427,7 +511,7 @@ export function RaporPage() {
 
             <div>
               <p className="text-slate-500">
-                {raporData.madrasah.alamat?.split(',')[0] || 'Madrasah'},{' '}
+                {safeMadrasah?.alamat?.split(',')[0] || 'Madrasah'},{' '}
                 {new Date().toLocaleDateString('id-ID', {
                   day: 'numeric',
                   month: 'long',
@@ -437,11 +521,11 @@ export function RaporPage() {
               <p className="font-semibold text-slate-800">Wali Kelas</p>
               <div className="h-16" />
               <p className="font-bold text-slate-900 border-t border-slate-400 inline-block px-4">
-                {raporData.waliKelas?.nama || '( ..................................... )'}
+                {safeWaliKelas?.nama || '( ..................................... )'}
               </p>
-              {raporData.waliKelas?.nip && (
+              {safeWaliKelas?.nip && (
                 <p className="text-[10px] text-slate-500 font-mono">
-                  NIP. {raporData.waliKelas.nip}
+                  NIP. {safeWaliKelas.nip}
                 </p>
               )}
             </div>
@@ -451,11 +535,11 @@ export function RaporPage() {
               <p className="font-semibold text-slate-800">Kepala Madrasah</p>
               <div className="h-16" />
               <p className="font-bold text-slate-900 border-t border-slate-400 inline-block px-4">
-                {raporData.madrasah.kepala_madrasah || 'Drs. H. Ahmad Fauzi, M.Pd.I'}
+                {safeMadrasah?.kepala_madrasah || '( ..................................... )'}
               </p>
-              {raporData.madrasah.nip_kepala_madrasah && (
+              {safeMadrasah?.nip_kepala && (
                 <p className="text-[10px] text-slate-500 font-mono">
-                  NIP. {raporData.madrasah.nip_kepala_madrasah}
+                  NIP. {safeMadrasah.nip_kepala}
                 </p>
               )}
             </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -19,6 +19,7 @@ import {
   AlertTriangle,
   BookOpen,
   Sparkles,
+  AlertCircle,
 } from 'lucide-react';
 
 const HARI_LIST = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'] as const;
@@ -39,7 +40,7 @@ export function JadwalPelajaranPage() {
   const canEdit = hasPermission('akademik', 'ubah') || hasPermission('akademik', 'tambah');
 
   // Filter
-  const [selectedKelasId, setSelectedKelasId] = useState<string>('1');
+  const [selectedKelasId, setSelectedKelasId] = useState<string>('');
   const [selectedGuruFilter, setSelectedGuruFilter] = useState<string>('');
 
   // Modal State
@@ -50,7 +51,7 @@ export function JadwalPelajaranPage() {
     jam_ke: 1,
     jam_mulai: '07:15',
     jam_selesai: '08:35',
-    kelas_id: '1',
+    kelas_id: '',
     mapel_id: '',
     guru_id: '',
     ruang: 'Ruang Kelas',
@@ -60,54 +61,72 @@ export function JadwalPelajaranPage() {
   const [conflictWarning, setConflictWarning] = useState<string | null>(null);
 
   // Queries
-  const { data: taList = [] } = useQuery({
+  const { data: rawTaList = [], isLoading: isLoadingTa } = useQuery({
     queryKey: ['tahun-ajaran'],
     queryFn: async () => {
       const res = await api.get<TahunAjaran[]>('/api/tahun-ajaran');
-      return res.data || [];
+      return Array.isArray(res.data) ? res.data : [];
     },
   });
 
-  const activeTa = taList.find((t) => t.is_active) || taList[0];
+  const taList = Array.isArray(rawTaList) ? rawTaList : [];
+  const activeTa = taList.find((t) => t?.is_active) || taList[0];
 
-  const { data: kelasList = [] } = useQuery({
+  const { data: rawKelasList = [] } = useQuery({
     queryKey: ['kelas-simple'],
     queryFn: async () => {
       const res = await api.get<Kelas[]>('/api/kelas/simple');
-      return res.data || [];
+      return Array.isArray(res.data) ? res.data : [];
     },
   });
 
-  const { data: guruList = [] } = useQuery({
+  const kelasList = Array.isArray(rawKelasList) ? rawKelasList : [];
+
+  // Auto-select first class when kelasList loads
+  useEffect(() => {
+    if (kelasList.length > 0 && (!selectedKelasId || !kelasList.some((k) => String(k?.id) === selectedKelasId))) {
+      setSelectedKelasId(String(kelasList[0]?.id));
+    }
+  }, [kelasList, selectedKelasId]);
+
+  const { data: rawGuruList = [] } = useQuery({
     queryKey: ['guru-simple'],
     queryFn: async () => {
       const res = await api.get<any[]>('/api/guru/simple');
-      return res.data || [];
+      return Array.isArray(res.data) ? res.data : [];
     },
   });
 
-  const { data: mapelList = [] } = useQuery({
+  const guruList = Array.isArray(rawGuruList) ? rawGuruList : [];
+
+  const { data: rawMapelList = [] } = useQuery({
     queryKey: ['mapel-list'],
     queryFn: async () => {
       const res = await api.get<any>('/api/mapel?limit=100');
-      return res.data?.data || [];
+      const items = res.data?.data || res.data || [];
+      return Array.isArray(items) ? items : [];
     },
   });
 
+  const mapelList = Array.isArray(rawMapelList) ? rawMapelList : [];
+
   // Query Jadwal
-  const { data: jadwalList = [], isLoading } = useQuery({
+  const { data: rawJadwalList = [], isLoading } = useQuery({
     queryKey: ['jadwal', selectedKelasId, selectedGuruFilter, activeTa?.id],
     queryFn: async () => {
+      if (!activeTa) return [];
       const params = new URLSearchParams();
       if (selectedKelasId) params.append('kelas_id', selectedKelasId);
       if (selectedGuruFilter) params.append('guru_id', selectedGuruFilter);
-      if (activeTa) params.append('tahun_ajaran_id', String(activeTa.id));
+      params.append('tahun_ajaran_id', String(activeTa.id));
 
       const res = await api.get<JadwalPelajaran[]>(`/api/akademik/jadwal?${params.toString()}`);
-      return res.data || [];
+      return Array.isArray(res.data) ? res.data : [];
     },
     enabled: Boolean(activeTa),
   });
+
+  const jadwalList = Array.isArray(rawJadwalList) ? rawJadwalList : [];
 
   // Mutations
   const createMutation = useMutation({
@@ -148,9 +167,9 @@ export function JadwalPelajaranPage() {
       jam_ke: jam_ke || 1,
       jam_mulai: start.trim(),
       jam_selesai: end.trim(),
-      kelas_id: selectedKelasId || kelasList[0]?.id?.toString() || '1',
-      mapel_id: mapelList[0]?.id?.toString() || '',
-      guru_id: guruList[0]?.id?.toString() || '',
+      kelas_id: selectedKelasId || (kelasList[0]?.id ? String(kelasList[0].id) : ''),
+      mapel_id: mapelList[0]?.id ? String(mapelList[0].id) : '',
+      guru_id: guruList[0]?.id ? String(guruList[0].id) : '',
       ruang: 'Ruang Kelas',
     });
     setConflictWarning(null);
@@ -159,12 +178,30 @@ export function JadwalPelajaranPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.guru_id || !formData.mapel_id || !formData.kelas_id) {
-      warning('Lengkapi data mapel, guru, dan kelas.');
+    if (!formData.kelas_id || !formData.mapel_id || !formData.guru_id) {
+      error('Mohon pilih Kelas, Mata Pelajaran, dan Guru pengampu.');
       return;
     }
     createMutation.mutate(formData);
   };
+
+  if (isLoadingTa) {
+    return (
+      <div className="bg-white p-8 rounded-2xl border border-slate-200/80 shadow-xs">
+        <TableSkeleton rows={6} cols={5} />
+      </div>
+    );
+  }
+
+  if (!activeTa) {
+    return (
+      <EmptyState
+        title="Belum Ada Tahun Ajaran Aktif"
+        description="Belum ada tahun ajaran aktif, atur di menu Tahun Ajaran."
+        icon={<AlertCircle className="w-8 h-8 text-amber-600" />}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -172,20 +209,20 @@ export function JadwalPelajaranPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-800">
-            Jadwal Pelajaran Mingguan & Deteksi Bentrok
+            Jadwal Pelajaran & Matriks KBM
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Matriks jadwal pelajaran mingguan per kelas dengan validasi bentrok otomatis guru dan ruang kelas.
+            Penataan jadwal Kegiatan Belajar Mengajar (KBM) mingguan dengan validasi bentrok guru pengampu dan ketersediaan ruang kelas.
           </p>
         </div>
 
         {canEdit && (
           <button
             onClick={() => handleOpenAddModal()}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+            className="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center gap-1.5 self-start sm:self-auto"
           >
             <Plus className="w-4 h-4" />
-            Tambah Jadwal Pelajaran
+            Tambah Jadwal KBM
           </button>
         )}
       </div>
@@ -194,22 +231,26 @@ export function JadwalPelajaranPage() {
       <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-slate-700">Tampilkan Kelas:</span>
+            <span className="text-xs font-semibold text-slate-700">Pilih Rombel / Kelas:</span>
             <select
               value={selectedKelasId}
               onChange={(e) => setSelectedKelasId(e.target.value)}
               className="px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-emerald-600 bg-white font-semibold text-emerald-800"
             >
-              {kelasList.map((k) => (
-                <option key={k.id} value={k.id}>
-                  Kelas {k.nama} (Tingkat {k.tingkat})
-                </option>
-              ))}
+              {kelasList.length === 0 ? (
+                <option value="">-- Belum Ada Kelas --</option>
+              ) : (
+                kelasList.map((k) => (
+                  <option key={k?.id} value={k?.id}>
+                    Kelas {k?.nama} (Tingkat {k?.tingkat})
+                  </option>
+                ))
+              )}
             </select>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500">Filter Guru (Opsional):</span>
+            <span className="text-xs font-semibold text-slate-700">Filter Guru:</span>
             <select
               value={selectedGuruFilter}
               onChange={(e) => setSelectedGuruFilter(e.target.value)}
@@ -217,16 +258,16 @@ export function JadwalPelajaranPage() {
             >
               <option value="">Semua Guru</option>
               {guruList.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.nama}
+                <option key={g?.id} value={g?.id}>
+                  {g?.nama}
                 </option>
               ))}
             </select>
           </div>
         </div>
 
-        <div className="text-xs text-slate-500 flex items-center gap-1.5">
-          <Sparkles className="w-4 h-4 text-amber-500" />
+        <div className="flex items-center gap-2 text-xs text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+          <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
           <span>Sistem mencegah bentrok guru & rombel secara otomatis</span>
         </div>
       </div>
@@ -238,8 +279,8 @@ export function JadwalPelajaranPage() {
             <CalendarDays className="w-4 h-4 text-emerald-600" />
             <span>
               Jadwal Kelas{' '}
-              {kelasList.find((k) => String(k.id) === selectedKelasId)?.nama || '-'} — TA{' '}
-              {activeTa?.tahun} ({activeTa?.semester})
+              {kelasList.find((k) => String(k?.id) === selectedKelasId)?.nama || '-'} — TA{' '}
+              {activeTa?.tahun || '-'} ({activeTa?.semester || '-'})
             </span>
           </div>
         </div>
@@ -273,7 +314,7 @@ export function JadwalPelajaranPage() {
                     {/* Hari Kolom */}
                     {HARI_LIST.map((hari) => {
                       const matchJadwal = jadwalList.find(
-                        (j) => j.hari === hari && j.jam_ke === jam.jam_ke
+                        (j) => j?.hari === hari && j?.jam_ke === jam.jam_ke
                       );
 
                       return (
@@ -285,7 +326,7 @@ export function JadwalPelajaranPage() {
                             <div className="p-2.5 rounded-xl border border-emerald-200 bg-emerald-50/70 shadow-2xs hover:shadow-sm transition-all text-left">
                               <div className="flex items-start justify-between gap-1">
                                 <span className="font-bold text-slate-900 text-xs line-clamp-1">
-                                  {matchJadwal.mapel?.nama}
+                                  {matchJadwal?.mapel?.nama || '-'}
                                 </span>
                                 {canEdit && (
                                   <button
@@ -299,11 +340,11 @@ export function JadwalPelajaranPage() {
                               </div>
                               <div className="text-[11px] text-emerald-800 font-medium mt-1 flex items-center gap-1 line-clamp-1">
                                 <User className="w-3 h-3 text-emerald-600 shrink-0" />
-                                <span>{matchJadwal.guru?.nama}</span>
+                                <span>{matchJadwal?.guru?.nama || '-'}</span>
                               </div>
                               <div className="text-[10px] text-slate-500 mt-1 flex items-center justify-between">
-                                <span className="font-mono">{matchJadwal.mapel?.kode}</span>
-                                <span>{matchJadwal.ruang || 'Kelas'}</span>
+                                <span className="font-mono">{matchJadwal?.mapel?.kode || '-'}</span>
+                                <span>{matchJadwal?.ruang || 'Kelas'}</span>
                               </div>
                             </div>
                           ) : (
@@ -400,9 +441,10 @@ export function JadwalPelajaranPage() {
               className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:outline-emerald-600 bg-white"
               required
             >
+              <option value="">-- Pilih Kelas --</option>
               {kelasList.map((k) => (
-                <option key={k.id} value={k.id}>
-                  Kelas {k.nama} (Tingkat {k.tingkat})
+                <option key={k?.id} value={k?.id}>
+                  Kelas {k?.nama} (Tingkat {k?.tingkat})
                 </option>
               ))}
             </select>
@@ -420,8 +462,8 @@ export function JadwalPelajaranPage() {
             >
               <option value="">-- Pilih Mata Pelajaran --</option>
               {mapelList.map((m: any) => (
-                <option key={m.id} value={m.id}>
-                  {m.nama} ({m.kode})
+                <option key={m?.id} value={m?.id}>
+                  {m?.nama} ({m?.kode})
                 </option>
               ))}
             </select>
@@ -439,8 +481,8 @@ export function JadwalPelajaranPage() {
             >
               <option value="">-- Pilih Guru --</option>
               {guruList.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.nama}
+                <option key={g?.id} value={g?.id}>
+                  {g?.nama}
                 </option>
               ))}
             </select>
@@ -461,7 +503,7 @@ export function JadwalPelajaranPage() {
             <button
               type="button"
               onClick={() => setModalOpen(false)}
-              className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-xl"
+              className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
             >
               Batal
             </button>

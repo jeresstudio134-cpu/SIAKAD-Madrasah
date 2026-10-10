@@ -26,8 +26,8 @@ export function NilaiPage() {
   const canEdit = hasPermission('akademik', 'ubah') || hasPermission('akademik', 'tambah');
 
   // Filter
-  const [selectedKelasId, setSelectedKelasId] = useState<string>('1');
-  const [selectedMapelId, setSelectedMapelId] = useState<string>('3'); // Default Fikih
+  const [selectedKelasId, setSelectedKelasId] = useState<string>('');
+  const [selectedMapelId, setSelectedMapelId] = useState<string>('');
 
   // Modal Bobot
   const [bobotModalOpen, setBobotModalOpen] = useState(false);
@@ -58,15 +58,16 @@ export function NilaiPage() {
   >([]);
 
   // Queries
-  const { data: taList = [] } = useQuery({
+  const { data: rawTaList = [], isLoading: isLoadingTa } = useQuery({
     queryKey: ['tahun-ajaran'],
     queryFn: async () => {
       const res = await api.get<TahunAjaran[]>('/api/tahun-ajaran');
-      return res.data || [];
+      return Array.isArray(res.data) ? res.data : [];
     },
   });
 
-  const activeTa = taList.find((t) => t.is_active) || taList[0];
+  const taList = Array.isArray(rawTaList) ? rawTaList : [];
+  const activeTa = taList.find((t) => t?.is_active) || taList[0];
 
   const { data: guruScope } = useQuery({
     queryKey: ['guru-scope'],
@@ -80,7 +81,7 @@ export function NilaiPage() {
     queryKey: ['kelas-simple'],
     queryFn: async () => {
       const res = await api.get<Kelas[]>('/api/kelas/simple');
-      return res.data || [];
+      return Array.isArray(res.data) ? res.data : [];
     },
   });
 
@@ -88,18 +89,34 @@ export function NilaiPage() {
     queryKey: ['mapel-list'],
     queryFn: async () => {
       const res = await api.get<any>('/api/mapel?limit=100');
-      return res.data?.data || [];
+      const items = res.data?.data || res.data || [];
+      return Array.isArray(items) ? items : [];
     },
   });
 
   // Scope filter jika user adalah guru
+  const validKelas = Array.isArray(rawKelasList) ? rawKelasList : [];
   const kelasList = guruScope?.isGuru
-    ? rawKelasList.filter((k) => guruScope.allowedKelasIds?.includes(k.id))
-    : rawKelasList;
+    ? validKelas.filter((k) => guruScope.allowedKelasIds?.includes(k?.id))
+    : validKelas;
 
+  const validMapel = Array.isArray(rawMapelList) ? rawMapelList : [];
   const mapelList = guruScope?.isGuru
-    ? rawMapelList.filter((m: any) => guruScope.taughtMapelIds?.includes(m.id))
-    : rawMapelList;
+    ? validMapel.filter((m: any) => guruScope.taughtMapelIds?.includes(m?.id))
+    : validMapel;
+
+  // Auto-select first class & mapel
+  useEffect(() => {
+    if (kelasList.length > 0 && (!selectedKelasId || !kelasList.some((k) => String(k?.id) === selectedKelasId))) {
+      setSelectedKelasId(String(kelasList[0]?.id));
+    }
+  }, [kelasList, selectedKelasId]);
+
+  useEffect(() => {
+    if (mapelList.length > 0 && (!selectedMapelId || !mapelList.some((m) => String(m?.id) === selectedMapelId))) {
+      setSelectedMapelId(String(mapelList[0]?.id));
+    }
+  }, [mapelList, selectedMapelId]);
 
   // Query Bobot Nilai
   const { data: bobotData } = useQuery({
@@ -126,27 +143,33 @@ export function NilaiPage() {
       const res = await api.get<any[]>(
         `/api/akademik/nilai?kelas_id=${selectedKelasId}&mapel_id=${selectedMapelId}&tahun_ajaran_id=${activeTa.id}`
       );
-      return res.data || [];
+      const items = res.data || [];
+      return Array.isArray(items) ? items : [];
     },
     enabled: Boolean(selectedKelasId && selectedMapelId && activeTa),
   });
 
   // Sinkronisasi data server ke state lokal
   useEffect(() => {
-    if (serverNilaiList.length > 0) {
-      const mapped = serverNilaiList.map((item) => ({
-        siswa_id: item.siswa.id,
-        nama: item.siswa.nama,
-        nis: item.siswa.nis,
-        nilai_tugas: Number(item.nilai_tugas) || 0,
-        nilai_uh: Number(item.nilai_uh) || 0,
-        nilai_uts: Number(item.nilai_uts) || 0,
-        nilai_uas: Number(item.nilai_uas) || 0,
-        nilai_keterampilan: Number(item.nilai_keterampilan) || 0,
-        nilai_akhir: Number(item.nilai_akhir) || 0,
-        predikat: item.predikat || 'C',
-        catatan: item.catatan || '',
-      }));
+    if (Array.isArray(serverNilaiList) && serverNilaiList.length > 0) {
+      const mapped = serverNilaiList.map((item) => {
+        const sId = item?.siswa?.id ?? item?.siswa_id ?? 0;
+        const sNama = item?.siswa?.nama ?? item?.nama ?? '-';
+        const sNis = item?.siswa?.nis ?? item?.nis ?? '-';
+        return {
+          siswa_id: sId,
+          nama: sNama,
+          nis: sNis,
+          nilai_tugas: Number(item?.nilai_tugas) || 0,
+          nilai_uh: Number(item?.nilai_uh) || 0,
+          nilai_uts: Number(item?.nilai_uts) || 0,
+          nilai_uas: Number(item?.nilai_uas) || 0,
+          nilai_keterampilan: Number(item?.nilai_keterampilan) || 0,
+          nilai_akhir: Number(item?.nilai_akhir) || 0,
+          predikat: (item?.predikat as 'A' | 'B' | 'C' | 'D') || 'C',
+          catatan: item?.catatan || '',
+        };
+      });
       setNilaiState(mapped);
     } else {
       setNilaiState([]);
@@ -154,7 +177,7 @@ export function NilaiPage() {
   }, [serverNilaiList]);
 
   // Current selected mapel info (for KKM)
-  const currentMapel = rawMapelList.find((m: any) => String(m.id) === selectedMapelId);
+  const currentMapel = validMapel.find((m: any) => String(m?.id) === selectedMapelId);
   const currentKkm = currentMapel?.kkm || 75;
 
   // Real-time calculation helper
@@ -166,18 +189,18 @@ export function NilaiPage() {
     keterampilan: number
   ) => {
     const totalBobot =
-      bobotForm.bobot_tugas +
-      bobotForm.bobot_uh +
-      bobotForm.bobot_uts +
-      bobotForm.bobot_uas +
-      bobotForm.bobot_keterampilan || 100;
+      (bobotForm.bobot_tugas || 0) +
+      (bobotForm.bobot_uh || 0) +
+      (bobotForm.bobot_uts || 0) +
+      (bobotForm.bobot_uas || 0) +
+      (bobotForm.bobot_keterampilan || 0) || 100;
 
     const raw =
-      (tugas * bobotForm.bobot_tugas +
-        uh * bobotForm.bobot_uh +
-        uts * bobotForm.bobot_uts +
-        uas * bobotForm.bobot_uas +
-        keterampilan * bobotForm.bobot_keterampilan) /
+      (tugas * (bobotForm.bobot_tugas || 0) +
+        uh * (bobotForm.bobot_uh || 0) +
+        uts * (bobotForm.bobot_uts || 0) +
+        uas * (bobotForm.bobot_uas || 0) +
+        keterampilan * (bobotForm.bobot_keterampilan || 0)) /
       totalBobot;
 
     const final = Math.round(raw * 10) / 10;
@@ -223,7 +246,7 @@ export function NilaiPage() {
 
   // Mutations
   const saveNilaiMutation = useMutation({
-    mutationFn: (items: any[]) =>
+    mutationFn: (items: typeof nilaiState) =>
       api.post('/api/akademik/nilai/batch', {
         kelas_id: Number(selectedKelasId),
         mapel_id: Number(selectedMapelId),
@@ -232,20 +255,20 @@ export function NilaiPage() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['nilai-siswa'] });
-      success('Seluruh nilai siswa berhasil disimpan.');
+      success('Nilai siswa berhasil disimpan.');
     },
     onError: (err: any) => error(err.message || 'Gagal menyimpan nilai.'),
   });
 
   const saveBobotMutation = useMutation({
-    mutationFn: (data: BobotNilai) =>
+    mutationFn: (form: BobotNilai) =>
       api.post('/api/akademik/bobot', {
-        ...data,
+        ...form,
         tahun_ajaran_id: activeTa?.id,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bobot-nilai'] });
-      success('Konfigurasi bobot penilaian berhasil diperbarui.');
+      success('Konfigurasi bobot penilaian berhasil disimpan.');
       setBobotModalOpen(false);
     },
     onError: (err: any) => error(err.message || 'Gagal menyimpan bobot.'),
@@ -275,6 +298,24 @@ export function NilaiPage() {
 
     saveBobotMutation.mutate(bobotForm);
   };
+
+  if (isLoadingTa) {
+    return (
+      <div className="bg-white p-8 rounded-2xl border border-slate-200/80 shadow-xs">
+        <TableSkeleton rows={6} cols={5} />
+      </div>
+    );
+  }
+
+  if (!activeTa) {
+    return (
+      <EmptyState
+        title="Belum Ada Tahun Ajaran Aktif"
+        description="Belum ada tahun ajaran aktif, atur di menu Tahun Ajaran."
+        icon={<AlertCircle className="w-8 h-8 text-amber-600" />}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -321,11 +362,15 @@ export function NilaiPage() {
               onChange={(e) => setSelectedKelasId(e.target.value)}
               className="px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-emerald-600 bg-white font-semibold text-emerald-800"
             >
-              {kelasList.map((k) => (
-                <option key={k.id} value={k.id}>
-                  Kelas {k.nama} (Tingkat {k.tingkat})
-                </option>
-              ))}
+              {kelasList.length === 0 ? (
+                <option value="">-- Belum Ada Kelas --</option>
+              ) : (
+                kelasList.map((k) => (
+                  <option key={k?.id} value={k?.id}>
+                    Kelas {k?.nama} (Tingkat {k?.tingkat})
+                  </option>
+                ))
+              )}
             </select>
           </div>
 
@@ -336,11 +381,15 @@ export function NilaiPage() {
               onChange={(e) => setSelectedMapelId(e.target.value)}
               className="px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-emerald-600 bg-white font-semibold text-slate-800"
             >
-              {mapelList.map((m: any) => (
-                <option key={m.id} value={m.id}>
-                  {m.nama} ({m.kode} - KKM {m.kkm})
-                </option>
-              ))}
+              {mapelList.length === 0 ? (
+                <option value="">-- Belum Ada Mapel --</option>
+              ) : (
+                mapelList.map((m: any) => (
+                  <option key={m?.id} value={m?.id}>
+                    {m?.nama} ({m?.kode} - KKM {m?.kkm})
+                  </option>
+                ))
+              )}
             </select>
           </div>
         </div>
@@ -388,10 +437,8 @@ export function NilaiPage() {
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
                 {nilaiState.map((row, idx) => {
-                  const isTuntas = row.nilai_akhir >= currentKkm;
-
                   return (
-                    <tr key={row.siswa_id} className="hover:bg-slate-50/70 transition-colors">
+                    <tr key={row.siswa_id || idx} className="hover:bg-slate-50/70 transition-colors">
                       <td className="py-2.5 px-3 text-center text-slate-400 font-mono">
                         {idx + 1}
                       </td>
@@ -460,38 +507,27 @@ export function NilaiPage() {
                           max={100}
                           disabled={!canEdit}
                           value={row.nilai_keterampilan || ''}
-                          onChange={(e) =>
-                            handleScoreChange(idx, 'nilai_keterampilan', e.target.value)
-                          }
+                          onChange={(e) => handleScoreChange(idx, 'nilai_keterampilan', e.target.value)}
                           className="w-16 px-1.5 py-1 text-center font-semibold text-xs border border-slate-200 rounded-lg focus:outline-emerald-600 bg-white"
                         />
                       </td>
 
-                      {/* Nilai Akhir (Otomatis) */}
-                      <td className="py-2 px-2 text-center bg-emerald-50/50">
-                        <div
-                          className={`font-black text-xs ${
-                            isTuntas ? 'text-emerald-800' : 'text-rose-700'
-                          }`}
-                        >
-                          {row.nilai_akhir}
-                        </div>
-                        <div className="text-[9px] text-slate-400">
-                          {isTuntas ? 'Tuntas' : 'Remedial'}
-                        </div>
+                      {/* Nilai Akhir */}
+                      <td className="py-2 px-2 text-center font-extrabold text-slate-900 bg-emerald-50/40 font-mono text-sm">
+                        {row.nilai_akhir}
                       </td>
 
-                      {/* Predikat (Otomatis) */}
-                      <td className="py-2 px-2 text-center bg-emerald-50/50">
+                      {/* Predikat */}
+                      <td className="py-2 px-2 text-center bg-emerald-50/40">
                         <span
-                          className={`inline-block px-2 py-0.5 rounded text-[10px] font-black ${
+                          className={`inline-block w-6 py-0.5 text-center rounded text-[11px] font-bold ${
                             row.predikat === 'A'
-                              ? 'bg-emerald-200 text-emerald-900'
+                              ? 'bg-emerald-100 text-emerald-800'
                               : row.predikat === 'B'
-                              ? 'bg-blue-100 text-blue-900'
+                              ? 'bg-blue-100 text-blue-800'
                               : row.predikat === 'C'
-                              ? 'bg-amber-100 text-amber-900'
-                              : 'bg-rose-100 text-rose-900'
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-rose-100 text-rose-800'
                           }`}
                         >
                           {row.predikat}
@@ -504,9 +540,9 @@ export function NilaiPage() {
                           type="text"
                           disabled={!canEdit}
                           value={row.catatan}
+                          placeholder={row.nilai_akhir >= currentKkm ? 'Tuntas' : 'Perlu bimbingan'}
                           onChange={(e) => handleScoreChange(idx, 'catatan', e.target.value)}
-                          placeholder="Catatan kemajuan..."
-                          className="w-full px-2.5 py-1 text-xs border border-slate-200 rounded-lg focus:outline-emerald-600 bg-white"
+                          className="w-full px-2 py-1 text-xs border border-slate-200 rounded-lg focus:outline-emerald-600 bg-white text-slate-700"
                         />
                       </td>
                     </tr>
@@ -522,133 +558,136 @@ export function NilaiPage() {
       <Modal
         isOpen={bobotModalOpen}
         onClose={() => setBobotModalOpen(false)}
-        title="Konfigurasi Bobot Penilaian"
+        title="Pengaturan Bobot Penilaian"
         maxWidth="md"
       >
         <form onSubmit={handleSaveBobot} className="space-y-4">
           <p className="text-xs text-slate-500">
-            Atur persentase bobot setiap komponen nilai. Total kumulatif kelima komponen harus tepat 100%.
+            Tentukan proporsi persentase setiap komponen penilaian. Jumlah akumulasi bobot harus tepat 100%.
           </p>
 
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-4">
               <label className="text-xs font-semibold text-slate-700">Bobot Tugas Mandiri / Terstruktur</label>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5">
                 <input
                   type="number"
                   min={0}
                   max={100}
                   value={bobotForm.bobot_tugas}
-                  onChange={(e) => setBobotForm({ ...bobotForm, bobot_tugas: Number(e.target.value) })}
-                  className="w-16 px-2 py-1 text-xs text-center border border-slate-300 rounded-lg focus:outline-emerald-600"
-                  required
+                  onChange={(e) =>
+                    setBobotForm((p) => ({ ...p, bobot_tugas: Number(e.target.value) || 0 }))
+                  }
+                  className="w-20 px-2 py-1.5 text-xs text-center border border-slate-300 rounded-lg focus:outline-emerald-600 font-bold"
                 />
-                <span className="text-xs text-slate-500">%</span>
+                <span className="text-xs text-slate-500 font-semibold">%</span>
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-4">
               <label className="text-xs font-semibold text-slate-700">Bobot Ulangan Harian (UH)</label>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5">
                 <input
                   type="number"
                   min={0}
                   max={100}
                   value={bobotForm.bobot_uh}
-                  onChange={(e) => setBobotForm({ ...bobotForm, bobot_uh: Number(e.target.value) })}
-                  className="w-16 px-2 py-1 text-xs text-center border border-slate-300 rounded-lg focus:outline-emerald-600"
-                  required
+                  onChange={(e) =>
+                    setBobotForm((p) => ({ ...p, bobot_uh: Number(e.target.value) || 0 }))
+                  }
+                  className="w-20 px-2 py-1.5 text-xs text-center border border-slate-300 rounded-lg focus:outline-emerald-600 font-bold"
                 />
-                <span className="text-xs text-slate-500">%</span>
+                <span className="text-xs text-slate-500 font-semibold">%</span>
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-slate-700">Bobot Ujian Tengah Semester (UTS)</label>
-              <div className="flex items-center gap-1">
+            <div className="flex items-center justify-between gap-4">
+              <label className="text-xs font-semibold text-slate-700">Bobot Ujian Tengah Semester (UTS / PTS)</label>
+              <div className="flex items-center gap-1.5">
                 <input
                   type="number"
                   min={0}
                   max={100}
                   value={bobotForm.bobot_uts}
-                  onChange={(e) => setBobotForm({ ...bobotForm, bobot_uts: Number(e.target.value) })}
-                  className="w-16 px-2 py-1 text-xs text-center border border-slate-300 rounded-lg focus:outline-emerald-600"
-                  required
+                  onChange={(e) =>
+                    setBobotForm((p) => ({ ...p, bobot_uts: Number(e.target.value) || 0 }))
+                  }
+                  className="w-20 px-2 py-1.5 text-xs text-center border border-slate-300 rounded-lg focus:outline-emerald-600 font-bold"
                 />
-                <span className="text-xs text-slate-500">%</span>
+                <span className="text-xs text-slate-500 font-semibold">%</span>
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-slate-700">Bobot Ujian Akhir Semester (UAS)</label>
-              <div className="flex items-center gap-1">
+            <div className="flex items-center justify-between gap-4">
+              <label className="text-xs font-semibold text-slate-700">Bobot Ujian Akhir Semester (UAS / PAS)</label>
+              <div className="flex items-center gap-1.5">
                 <input
                   type="number"
                   min={0}
                   max={100}
                   value={bobotForm.bobot_uas}
-                  onChange={(e) => setBobotForm({ ...bobotForm, bobot_uas: Number(e.target.value) })}
-                  className="w-16 px-2 py-1 text-xs text-center border border-slate-300 rounded-lg focus:outline-emerald-600"
-                  required
+                  onChange={(e) =>
+                    setBobotForm((p) => ({ ...p, bobot_uas: Number(e.target.value) || 0 }))
+                  }
+                  className="w-20 px-2 py-1.5 text-xs text-center border border-slate-300 rounded-lg focus:outline-emerald-600 font-bold"
                 />
-                <span className="text-xs text-slate-500">%</span>
+                <span className="text-xs text-slate-500 font-semibold">%</span>
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-slate-700">Bobot Praktik / Keterampilan</label>
-              <div className="flex items-center gap-1">
+            <div className="flex items-center justify-between gap-4">
+              <label className="text-xs font-semibold text-slate-700">Bobot Keterampilan / Praktik</label>
+              <div className="flex items-center gap-1.5">
                 <input
                   type="number"
                   min={0}
                   max={100}
                   value={bobotForm.bobot_keterampilan}
                   onChange={(e) =>
-                    setBobotForm({ ...bobotForm, bobot_keterampilan: Number(e.target.value) })
+                    setBobotForm((p) => ({ ...p, bobot_keterampilan: Number(e.target.value) || 0 }))
                   }
-                  className="w-16 px-2 py-1 text-xs text-center border border-slate-300 rounded-lg focus:outline-emerald-600"
-                  required
+                  className="w-20 px-2 py-1.5 text-xs text-center border border-slate-300 rounded-lg focus:outline-emerald-600 font-bold"
                 />
-                <span className="text-xs text-slate-500">%</span>
+                <span className="text-xs text-slate-500 font-semibold">%</span>
               </div>
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
-            <span className="font-semibold text-slate-700">Total Akumulasi Bobot:</span>
+          <div className="pt-3 border-t border-slate-200 flex items-center justify-between text-xs">
+            <span className="font-semibold text-slate-600">Total Akumulasi:</span>
             <span
-              className={`font-black text-sm ${
-                bobotForm.bobot_tugas +
-                  bobotForm.bobot_uh +
-                  bobotForm.bobot_uts +
-                  bobotForm.bobot_uas +
-                  bobotForm.bobot_keterampilan ===
+              className={`font-extrabold text-sm ${
+                Number(bobotForm.bobot_tugas) +
+                  Number(bobotForm.bobot_uh) +
+                  Number(bobotForm.bobot_uts) +
+                  Number(bobotForm.bobot_uas) +
+                  Number(bobotForm.bobot_keterampilan) ===
                 100
                   ? 'text-emerald-700'
                   : 'text-rose-600'
               }`}
             >
-              {bobotForm.bobot_tugas +
-                bobotForm.bobot_uh +
-                bobotForm.bobot_uts +
-                bobotForm.bobot_uas +
-                bobotForm.bobot_keterampilan}
+              {Number(bobotForm.bobot_tugas) +
+                Number(bobotForm.bobot_uh) +
+                Number(bobotForm.bobot_uts) +
+                Number(bobotForm.bobot_uas) +
+                Number(bobotForm.bobot_keterampilan)}
               %
             </span>
           </div>
 
-          <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-100">
+          <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
               onClick={() => setBobotModalOpen(false)}
-              className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-xl"
+              className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50"
             >
               Batal
             </button>
             <button
               type="submit"
               disabled={saveBobotMutation.isPending}
-              className="px-4 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 disabled:bg-emerald-400 rounded-xl transition-colors cursor-pointer"
+              className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 disabled:bg-emerald-400 text-white rounded-xl text-xs font-semibold shadow-xs"
             >
               {saveBobotMutation.isPending ? 'Menyimpan...' : 'Simpan Bobot'}
             </button>

@@ -320,7 +320,7 @@ export function PembayaranPage() {
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                 <CreditCard className="w-4 h-4 text-emerald-600" />
-                Daftar Tagihan Siswa (Tahun Ajaran {activeTa?.tahun})
+                Daftar Tagihan Siswa (Tahun Ajaran {activeTa?.tahun || '-'})
               </h4>
               <span className="text-xs text-slate-500 font-medium">
                 {tagihanList.length} Pos Tagihan

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -25,7 +25,7 @@ export function AbsensiPage() {
   const canEdit = hasPermission('akademik', 'ubah') || hasPermission('akademik', 'tambah');
 
   // Filter
-  const [selectedKelasId, setSelectedKelasId] = useState<string>('1');
+  const [selectedKelasId, setSelectedKelasId] = useState<string>('');
   const [selectedTanggal, setSelectedTanggal] = useState<string>(
     new Date().toISOString().slice(0, 10)
   );
@@ -41,15 +41,16 @@ export function AbsensiPage() {
   >({});
 
   // Queries
-  const { data: taList = [] } = useQuery({
+  const { data: rawTaList = [], isLoading: isLoadingTa } = useQuery({
     queryKey: ['tahun-ajaran'],
     queryFn: async () => {
       const res = await api.get<TahunAjaran[]>('/api/tahun-ajaran');
-      return res.data || [];
+      return Array.isArray(res.data) ? res.data : [];
     },
   });
 
-  const activeTa = taList.find((t) => t.is_active) || taList[0];
+  const taList = Array.isArray(rawTaList) ? rawTaList : [];
+  const activeTa = taList.find((t) => t?.is_active) || taList[0];
 
   const { data: guruScope } = useQuery({
     queryKey: ['guru-scope'],
@@ -63,29 +64,40 @@ export function AbsensiPage() {
     queryKey: ['kelas-simple'],
     queryFn: async () => {
       const res = await api.get<Kelas[]>('/api/kelas/simple');
-      return res.data || [];
+      return Array.isArray(res.data) ? res.data : [];
     },
   });
 
   // Filter kelas berdasarkan scope jika login sebagai guru
+  const validRawKelas = Array.isArray(rawKelasList) ? rawKelasList : [];
   const kelasList = guruScope?.isGuru
-    ? rawKelasList.filter((k) => guruScope.allowedKelasIds?.includes(k.id))
-    : rawKelasList;
+    ? validRawKelas.filter((k) => guruScope.allowedKelasIds?.includes(k?.id))
+    : validRawKelas;
+
+  // Auto-select first class when kelasList loads
+  useEffect(() => {
+    if (kelasList.length > 0 && (!selectedKelasId || !kelasList.some((k) => String(k?.id) === selectedKelasId))) {
+      setSelectedKelasId(String(kelasList[0]?.id));
+    }
+  }, [kelasList, selectedKelasId]);
 
   // Query Absensi Harian
-  const { data: harianList = [], isLoading: isLoadingHarian } = useQuery({
+  const { data: rawHarianList = [], isLoading: isLoadingHarian } = useQuery({
     queryKey: ['absensi-harian', selectedKelasId, selectedTanggal, activeTa?.id],
     queryFn: async () => {
-      if (!selectedKelasId) return [];
-      const res = await api.get<Array<{ siswa: any; status: 'H' | 'I' | 'S' | 'A'; catatan: string }>>(
+      if (!selectedKelasId || !activeTa) return [];
+      const res = await api.get<Array<{ siswa?: any; siswa_id?: number; nama?: string; nis?: string; status: 'H' | 'I' | 'S' | 'A'; catatan: string }>>(
         `/api/akademik/absensi?kelas_id=${selectedKelasId}&tanggal=${selectedTanggal}&tahun_ajaran_id=${activeTa?.id}`
       );
-      const list = res.data || [];
+      const list = Array.isArray(res.data) ? res.data : [];
 
       // Update local state
       const stateMap: Record<number, { status: 'H' | 'I' | 'S' | 'A'; catatan: string }> = {};
       list.forEach((item) => {
-        stateMap[item.siswa.id] = { status: item.status, catatan: item.catatan || '' };
+        const sId = item?.siswa?.id ?? item?.siswa_id;
+        if (sId) {
+          stateMap[sId] = { status: item?.status || 'H', catatan: item?.catatan || '' };
+        }
       });
       setAttendanceState(stateMap);
 
@@ -94,8 +106,10 @@ export function AbsensiPage() {
     enabled: Boolean(selectedKelasId && activeTa),
   });
 
+  const harianList = Array.isArray(rawHarianList) ? rawHarianList : [];
+
   // Query Rekap Bulanan / Semester
-  const { data: rekapList = [], isLoading: isLoadingRekap } = useQuery({
+  const { data: rawRekapList = [], isLoading: isLoadingRekap } = useQuery({
     queryKey: ['absensi-rekap', selectedKelasId, activeTab, rekapBulan, rekapTahun, activeTa?.id],
     queryFn: async () => {
       if (!selectedKelasId || !activeTa) return [];
@@ -110,10 +124,12 @@ export function AbsensiPage() {
       }
 
       const res = await api.get<RekapAbsensiSiswa[]>(`/api/akademik/absensi/rekap?${params.toString()}`);
-      return res.data || [];
+      return Array.isArray(res.data) ? res.data : [];
     },
     enabled: Boolean(selectedKelasId && activeTa && (activeTab === 'bulanan' || activeTab === 'semester')),
   });
+
+  const rekapList = Array.isArray(rawRekapList) ? rawRekapList : [];
 
   // Save Absensi Mutation
   const saveMutation = useMutation({
@@ -155,29 +171,52 @@ export function AbsensiPage() {
   const handleHadirSemua = () => {
     const updated: Record<number, { status: 'H' | 'I' | 'S' | 'A'; catatan: string }> = {};
     harianList.forEach((item) => {
-      updated[item.siswa.id] = {
-        status: 'H',
-        catatan: attendanceState[item.siswa.id]?.catatan || '',
-      };
+      const sId = item?.siswa?.id ?? item?.siswa_id;
+      if (sId) {
+        updated[sId] = {
+          status: 'H',
+          catatan: attendanceState[sId]?.catatan || '',
+        };
+      }
     });
     setAttendanceState(updated);
-    success('Semua siswa diatur Hadir (H).');
   };
 
   const handleSaveAll = () => {
-    const items = Object.entries(attendanceState).map(([siswaId, data]) => ({
-      siswa_id: Number(siswaId),
-      status: data.status,
-      catatan: data.catatan,
-    }));
-
-    if (items.length === 0) {
-      warning('Belum ada data siswa untuk disimpan.');
+    if (harianList.length === 0) {
+      warning('Tidak ada siswa untuk disimpan absensinya.');
       return;
     }
 
+    const items = harianList.map((item) => {
+      const sId = item?.siswa?.id ?? item?.siswa_id;
+      return {
+        siswa_id: sId,
+        status: attendanceState[sId]?.status || item?.status || 'H',
+        catatan: attendanceState[sId]?.catatan || item?.catatan || '',
+      };
+    });
+
     saveMutation.mutate(items);
   };
+
+  if (isLoadingTa) {
+    return (
+      <div className="bg-white p-8 rounded-2xl border border-slate-200/80 shadow-xs">
+        <TableSkeleton rows={6} cols={5} />
+      </div>
+    );
+  }
+
+  if (!activeTa) {
+    return (
+      <EmptyState
+        title="Belum Ada Tahun Ajaran Aktif"
+        description="Belum ada tahun ajaran aktif, atur di menu Tahun Ajaran."
+        icon={<AlertCircle className="w-8 h-8 text-amber-600" />}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -185,25 +224,26 @@ export function AbsensiPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-800">
-            Absensi Harian Siswa & Rekap Kehadiran
+            Presensi & Rekap Absensi Siswa
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Pencatatan kehadiran (Hadir, Izin, Sakit, Alpa) dan rekapitulasi kehadiran bulanan serta semester untuk rapor.
+            Pencatatan kehadiran harian siswa per rombel, rekap bulanan persentase kehadiran, dan akumulasi kehadiran semester untuk buku rapor.
           </p>
         </div>
 
-        {activeTab === 'harian' && canEdit && (
+        {canEdit && activeTab === 'harian' && (
           <div className="flex items-center gap-2">
             <button
               onClick={handleHadirSemua}
-              className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+              disabled={harianList.length === 0}
+              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
             >
               <CheckCircle className="w-4 h-4 text-emerald-600" />
               Hadirkan Semua
             </button>
             <button
               onClick={handleSaveAll}
-              disabled={saveMutation.isPending}
+              disabled={saveMutation.isPending || harianList.length === 0}
               className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 disabled:bg-emerald-400 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
             >
               <Save className="w-4 h-4" />
@@ -262,11 +302,15 @@ export function AbsensiPage() {
               onChange={(e) => setSelectedKelasId(e.target.value)}
               className="px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-emerald-600 bg-white font-semibold text-emerald-800"
             >
-              {kelasList.map((k) => (
-                <option key={k.id} value={k.id}>
-                  Kelas {k.nama} (Tingkat {k.tingkat})
-                </option>
-              ))}
+              {kelasList.length === 0 ? (
+                <option value="">-- Belum Ada Kelas --</option>
+              ) : (
+                kelasList.map((k) => (
+                  <option key={k?.id} value={k?.id}>
+                    Kelas {k?.nama} (Tingkat {k?.tingkat})
+                  </option>
+                ))
+              )}
             </select>
           </div>
 
@@ -346,21 +390,24 @@ export function AbsensiPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
                   {harianList.map((item, idx) => {
-                    const currentStatus = attendanceState[item.siswa.id]?.status || 'H';
-                    const currentCatatan = attendanceState[item.siswa.id]?.catatan || '';
+                    const sId = item?.siswa?.id ?? item?.siswa_id ?? idx;
+                    const sNama = item?.siswa?.nama ?? item?.nama ?? '-';
+                    const sNis = item?.siswa?.nis ?? item?.nis ?? '-';
+                    const currentStatus = attendanceState[sId]?.status || item?.status || 'H';
+                    const currentCatatan = attendanceState[sId]?.catatan ?? item?.catatan ?? '';
 
                     return (
-                      <tr key={item.siswa.id} className="hover:bg-slate-50/70 transition-colors">
+                      <tr key={sId} className="hover:bg-slate-50/70 transition-colors">
                         <td className="py-3.5 px-4 text-center text-slate-400 font-mono">
                           {idx + 1}
                         </td>
-                        <td className="py-3.5 px-4 font-bold text-slate-900">{item.siswa.nama}</td>
-                        <td className="py-3.5 px-4 font-mono text-slate-600">{item.siswa.nis}</td>
+                        <td className="py-3.5 px-4 font-bold text-slate-900">{sNama}</td>
+                        <td className="py-3.5 px-4 font-mono text-slate-600">{sNis}</td>
                         <td className="py-3.5 px-4 text-center">
                           <div className="inline-flex rounded-xl p-1 bg-slate-100 border border-slate-200 gap-1">
                             <button
                               type="button"
-                              onClick={() => handleStatusChange(item.siswa.id, 'H')}
+                              onClick={() => handleStatusChange(sId, 'H')}
                               className={`px-3 py-1 rounded-lg font-bold text-xs transition-all cursor-pointer ${
                                 currentStatus === 'H'
                                   ? 'bg-emerald-600 text-white shadow-xs'
@@ -372,7 +419,7 @@ export function AbsensiPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => handleStatusChange(item.siswa.id, 'I')}
+                              onClick={() => handleStatusChange(sId, 'I')}
                               className={`px-3 py-1 rounded-lg font-bold text-xs transition-all cursor-pointer ${
                                 currentStatus === 'I'
                                   ? 'bg-blue-600 text-white shadow-xs'
@@ -384,7 +431,7 @@ export function AbsensiPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => handleStatusChange(item.siswa.id, 'S')}
+                              onClick={() => handleStatusChange(sId, 'S')}
                               className={`px-3 py-1 rounded-lg font-bold text-xs transition-all cursor-pointer ${
                                 currentStatus === 'S'
                                   ? 'bg-amber-600 text-white shadow-xs'
@@ -396,7 +443,7 @@ export function AbsensiPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => handleStatusChange(item.siswa.id, 'A')}
+                              onClick={() => handleStatusChange(sId, 'A')}
                               className={`px-3 py-1 rounded-lg font-bold text-xs transition-all cursor-pointer ${
                                 currentStatus === 'A'
                                   ? 'bg-rose-600 text-white shadow-xs'
@@ -412,7 +459,7 @@ export function AbsensiPage() {
                           <input
                             type="text"
                             value={currentCatatan}
-                            onChange={(e) => handleCatatanChange(item.siswa.id, e.target.value)}
+                            onChange={(e) => handleCatatanChange(sId, e.target.value)}
                             placeholder="Alasan izin / sakit..."
                             className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-emerald-600"
                           />
@@ -455,40 +502,43 @@ export function AbsensiPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {rekapList.map((item, idx) => (
-                    <tr key={item.siswa_id} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="py-3.5 px-4 text-center text-slate-400 font-mono">
-                        {idx + 1}
-                      </td>
-                      <td className="py-3.5 px-4 font-bold text-slate-900">{item.nama}</td>
-                      <td className="py-3.5 px-4 font-mono text-slate-600">{item.nis}</td>
-                      <td className="py-3.5 px-4 text-center font-bold text-emerald-700">
-                        {item.hadir}
-                      </td>
-                      <td className="py-3.5 px-4 text-center font-bold text-blue-700">
-                        {item.izin}
-                      </td>
-                      <td className="py-3.5 px-4 text-center font-bold text-amber-700">
-                        {item.sakit}
-                      </td>
-                      <td className="py-3.5 px-4 text-center font-bold text-rose-700">
-                        {item.alpa}
-                      </td>
-                      <td className="py-3.5 px-4 text-center">
-                        <span
-                          className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold ${
-                            item.persentase >= 85
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : item.persentase >= 75
-                              ? 'bg-amber-100 text-amber-800'
-                              : 'bg-rose-100 text-rose-800'
-                          }`}
-                        >
-                          {item.persentase}%
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {rekapList.map((item, idx) => {
+                    const persen = Number(item?.persentase) || 0;
+                    return (
+                      <tr key={item?.siswa_id || idx} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="py-3.5 px-4 text-center text-slate-400 font-mono">
+                          {idx + 1}
+                        </td>
+                        <td className="py-3.5 px-4 font-bold text-slate-900">{item?.nama || '-'}</td>
+                        <td className="py-3.5 px-4 font-mono text-slate-600">{item?.nis || '-'}</td>
+                        <td className="py-3.5 px-4 text-center font-bold text-emerald-700">
+                          {item?.hadir ?? 0}
+                        </td>
+                        <td className="py-3.5 px-4 text-center font-bold text-blue-700">
+                          {item?.izin ?? 0}
+                        </td>
+                        <td className="py-3.5 px-4 text-center font-bold text-amber-700">
+                          {item?.sakit ?? 0}
+                        </td>
+                        <td className="py-3.5 px-4 text-center font-bold text-rose-700">
+                          {item?.alpa ?? 0}
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          <span
+                            className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold ${
+                              persen >= 85
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : persen >= 75
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-rose-100 text-rose-800'
+                            }`}
+                          >
+                            {persen}%
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

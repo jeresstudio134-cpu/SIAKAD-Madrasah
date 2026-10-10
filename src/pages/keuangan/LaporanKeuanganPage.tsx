@@ -178,7 +178,7 @@ export function LaporanKeuanganPage() {
             {startDate} s.d. {endDate}
           </h3>
           <p className="text-[11px] text-slate-400 mt-0.5">
-            Tahun Ajaran {activeTa?.tahun}
+            Tahun Ajaran {activeTa?.tahun || '-'}
           </p>
         </div>
       </div>

@@ -99,7 +99,7 @@ export function TunggakanPage() {
             Daftar & Rekapitulasi Tunggakan Siswa
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Monitoring tunggakan pembayaran per siswa dan per rombongan belajar tahun ajaran {activeTa?.tahun}.
+            Monitoring tunggakan pembayaran per siswa dan per rombongan belajar tahun ajaran {activeTa?.tahun || '-'}.
           </p>
         </div>
 
@@ -209,7 +209,7 @@ export function TunggakanPage() {
           DAFTAR TUNGGAKAN PEMBAYARAN SISWA
         </h1>
         <p className="text-xs text-slate-600">
-          Tahun Ajaran {activeTa?.tahun} — Dicetak pada {new Date().toLocaleDateString('id-ID')}
+          Tahun Ajaran {activeTa?.tahun || '-'} — Dicetak pada {new Date().toLocaleDateString('id-ID')}
         </p>
       </div>
 
@@ -227,23 +227,23 @@ export function TunggakanPage() {
             />
           ) : (
             <div className="space-y-3">
-              {tunggakanSiswaList.map((item) => (
+              {tunggakanSiswaList.map((item, idx) => (
                 <div
-                  key={item.siswa.id}
+                  key={item.siswa?.id ?? (item as any)?.siswa_id ?? idx}
                   className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-3 hover:border-slate-300 transition-colors"
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-3 border-b border-slate-100">
                     <div>
                       <div className="flex items-center gap-2">
                         <h4 className="text-sm font-bold text-slate-900">
-                          {item.siswa.nama}
+                          {item.siswa?.nama || '-'}
                         </h4>
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
                           Kelas {item.kelas?.nama || '-'}
                         </span>
                       </div>
                       <p className="text-[11px] text-slate-500 font-mono mt-0.5">
-                        NIS: {item.siswa.nis} • Orang Tua/Wali: {item.siswa.nama_ayah || item.siswa.nama_ibu || '-'} ({item.siswa.telepon_ortu || '-'})
+                        NIS: {item.siswa?.nis || '-'} • Orang Tua/Wali: {item.siswa?.nama_ayah || item.siswa?.nama_ibu || '-'} ({item.siswa?.telepon_ortu || '-'})
                       </p>
                     </div>
 
@@ -259,7 +259,7 @@ export function TunggakanPage() {
 
                       <button
                         onClick={() =>
-                          navigate(`/keuangan/pembayaran?siswaId=${item.siswa.id}`)
+                          navigate(`/keuangan/pembayaran?siswaId=${item.siswa?.id ?? (item as any)?.siswa_id}`)
                         }
                         className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold transition-colors cursor-pointer print:hidden shrink-0"
                       >

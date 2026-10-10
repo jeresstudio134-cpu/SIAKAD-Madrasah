@@ -252,7 +252,7 @@ export function KelasPage() {
                         )}
                       </td>
                       <td className="py-3.5 px-4 text-slate-500">
-                        {item.tahun_ajaran ? `${item.tahun_ajaran.tahun} (${item.tahun_ajaran.semester})` : '-'}
+                        {item.tahun_ajaran?.tahun ? `${item.tahun_ajaran.tahun} (${item.tahun_ajaran.semester || '-'})` : '-'}
                       </td>
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-1.5">

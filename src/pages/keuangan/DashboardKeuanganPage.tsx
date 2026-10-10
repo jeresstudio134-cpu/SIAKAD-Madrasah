@@ -52,7 +52,7 @@ export function DashboardKeuanganPage() {
             Dashboard Keuangan Madrasah
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Pantau arus kas, realisasi penerimaan SPP & infaq, dan rekapitulasi tunggakan tahun ajaran {activeTa?.tahun} ({activeTa?.semester}).
+            Pantau arus kas, realisasi penerimaan SPP & infaq, dan rekapitulasi tunggakan tahun ajaran {activeTa?.tahun || '-'} ({activeTa?.semester || '-'}).
           </p>
         </div>
 

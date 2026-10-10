@@ -1464,6 +1464,12 @@ export class DbStore {
     return siswaList.map((s) => {
       const existing = absensiMap.get(s.siswa_id);
       return {
+        siswa: {
+          id: s.siswa_id,
+          nama: s.nama,
+          nis: s.nis,
+          jenis_kelamin: s.jenis_kelamin,
+        },
         siswa_id: s.siswa_id,
         nama: s.nama,
         nis: s.nis,
@@ -1685,6 +1691,11 @@ export class DbStore {
     return siswaList.map((s) => {
       const existing = nilaiMap.get(s.siswa_id);
       return {
+        siswa: {
+          id: s.siswa_id,
+          nama: s.nama,
+          nis: s.nis,
+        },
         siswa_id: s.siswa_id,
         nama: s.nama,
         nis: s.nis,
@@ -1838,6 +1849,11 @@ export class DbStore {
     return siswaList.map((s) => {
       const c = catatanMap.get(s.siswa_id);
       return {
+        siswa: {
+          id: s.siswa_id,
+          nama: s.nama,
+          nis: s.nis,
+        },
         siswa_id: s.siswa_id,
         nama: s.nama,
         nis: s.nis,
@@ -1953,33 +1969,83 @@ export class DbStore {
       )
       .limit(1);
 
-    return {
-      siswa,
-      madrasah,
-      tahun_ajaran: ta,
-      kelas,
-      nilai: nilaiRows.map((n) => ({
-        mapel_id: n.mapel_id,
+    // Wali kelas lookup
+    const [waliKelas] = kelas?.wali_kelas_id
+      ? await this.db
+          .select()
+          .from(schema.guru)
+          .where(eq(schema.guru.id, kelas.wali_kelas_id))
+          .limit(1)
+      : [null];
+
+    const safeTa = ta || (await this.getActiveTahunAjaran()) || {
+      id: tahun_ajaran_id || 1,
+      tahun: '2024/2025',
+      semester: 'Ganjil',
+      is_active: true,
+    };
+
+    const safeMadrasah = madrasah || {
+      nama: 'Madrasah',
+      nsm: '-',
+      npsn: '-',
+      alamat: '',
+      telepon: '',
+      email: '',
+      logo_url: '',
+    };
+
+    const mappedNilaiList = nilaiRows.map((n) => ({
+      mapel_id: n.mapel_id,
+      nama: n.mapel_nama,
+      kode: n.mapel_kode,
+      kelompok: n.mapel_kelompok,
+      kkm: Number(n.mapel_kkm) || 75,
+      nilai_tugas: Number(n.nilai_tugas) || 0,
+      nilai_uh: Number(n.nilai_uh) || 0,
+      nilai_uts: Number(n.nilai_uts) || 0,
+      nilai_uas: Number(n.nilai_uas) || 0,
+      nilai_keterampilan: Number(n.nilai_keterampilan) || 0,
+      nilai_akhir: Number(n.nilai_akhir) || 0,
+      predikat: n.predikat || 'C',
+      catatan: n.catatan || '',
+      mapel: {
+        id: n.mapel_id,
         nama: n.mapel_nama,
         kode: n.mapel_kode,
         kelompok: n.mapel_kelompok,
-        kkm: n.mapel_kkm,
-        nilai_akhir: Number(n.nilai_akhir),
-        predikat: n.predikat,
-        catatan: n.catatan,
-      })),
-      absensi: { hadir, izin, sakit, alpa },
-      catatan: catatan || {
-        sikap_spiritual: 'Baik',
-        deskripsi_spiritual: 'Menunjukkan ketaatan beribadah dan akhlak terpuji.',
-        sikap_sosial: 'Baik',
-        deskripsi_sosial: 'Menunjukkan kepedulian sosial, sopan santun, dan kerja sama yang baik.',
-        juz_hafalan: 'Juz 30',
-        surah_terakhir: 'An-Naba',
-        predikat_tahfidz: 'Jayyid',
-        catatan_wali_kelas: 'Tingkatkan terus prestasi belajar dan kedisiplinan.',
-        status_akhir: 'Naik Kelas',
+        kkm: Number(n.mapel_kkm) || 75,
       },
+    }));
+
+    const absensiObj = { hadir, izin, sakit, alpa };
+    const catatanObj = catatan || {
+      sikap_spiritual: 'Baik',
+      deskripsi_spiritual: 'Menunjukkan ketaatan beribadah dan akhlak terpuji.',
+      sikap_sosial: 'Baik',
+      deskripsi_sosial: 'Menunjukkan kepedulian sosial, sopan santun, dan kerja sama yang baik.',
+      juz_hafalan: 'Juz 30',
+      surah_terakhir: 'An-Naba',
+      predikat_tahfidz: 'Jayyid',
+      catatan_wali_kelas: 'Tingkatkan terus prestasi belajar dan kedisiplinan.',
+      status_akhir: 'Naik Kelas',
+      naik_ke_kelas: null,
+    };
+
+    return {
+      siswa,
+      madrasah: safeMadrasah,
+      tahun_ajaran: safeTa,
+      tahunAjaran: safeTa,
+      kelas: kelas || { id: 0, nama: '-', tingkat: '-' },
+      waliKelas: waliKelas || null,
+      wali_kelas: waliKelas || null,
+      nilai: mappedNilaiList,
+      nilaiList: mappedNilaiList,
+      absensi: absensiObj,
+      rekapAbsensi: absensiObj,
+      catatan: catatanObj,
+      catatanRapor: catatanObj,
     };
   }
 

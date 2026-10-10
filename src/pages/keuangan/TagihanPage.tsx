@@ -179,7 +179,7 @@ export function TagihanPage() {
             Daftar Tagihan Siswa
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Pengelolaan tagihan SPP bulanan dan pos pembayaran siswa per tahun ajaran {activeTa?.tahun}.
+            Pengelolaan tagihan SPP bulanan dan pos pembayaran siswa per tahun ajaran {activeTa?.tahun || '-'}.
           </p>
         </div>
 
